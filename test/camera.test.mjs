@@ -120,3 +120,21 @@ test("settledWindowAt returns the window where an active move lands", () => {
   assert.deepEqual(settledWindowAt(frames, shots, 150), frames[2]);
   assert.deepEqual(settledWindowAt(frames, shots, 900), frames[3]);
 });
+
+import { trackBoxAt } from "../engine/camera.mjs";
+
+test("tracked boxes interpolate between samples so a follow is a ramp", () => {
+  const samples = [[1000, 100, 600, 400, 300], [1200, 100, 500, 400, 300], [1400, 100, 440, 400, 300]];
+  assert.deepEqual(trackBoxAt(samples, 900), { x: 100, y: 600, w: 400, h: 300 });
+  assert.deepEqual(trackBoxAt(samples, 1100), { x: 100, y: 550, w: 400, h: 300 });
+  assert.deepEqual(trackBoxAt(samples, 1300), { x: 100, y: 470, w: 400, h: 300 });
+  assert.deepEqual(trackBoxAt(samples, 2000), { x: 100, y: 440, w: 400, h: 300 });
+});
+
+test("a focus frame that fits the stage never reaches into the fill below", () => {
+  const st = { x: 0, y: 0, w: 1190, h: 1000, masks: [], cuts: [] };
+  const card = frameGeometry(st, { aspect: 0.8, outWidthPx: 960, deviceScaleFactor: 2 });
+  const f = frameAround({ x: 779, y: 450, w: 637, h: 610 }, card, st);
+  assert.ok(f.y + f.h <= 1000 + 1e-9, `bottom ${f.y + f.h} stays inside the stage`);
+  assert.ok(f.h <= 1000);
+});

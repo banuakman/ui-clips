@@ -6,6 +6,8 @@
 - Posters and contact-sheet cells render through the camera per output size, using the window a move settles on; `sheet --size <name>`
 - §13 rest is enforced again: every camera size must start and end at the opening framing, and a crossfade loop must rest there for 0.4 s before the fade
 - Spec §7.1, §8, §10.3, §10.4, §13 and appendix D updated to match (2026-10-22)
+- A focus frame that fits the stage stays inside it, so no fill shows below a pushed-in shot; only the contain wide (or a frame taller than the stage) reaches into the fill
+- Tracked targets: all tracks are read in parallel each tick (sample rate set by the slowest read, not their sum) and boxes are interpolated between samples at export, so a focus following a scrolling element moves as a ramp rather than a staircase
 
 ## Milestone 2, pass B: camera direction, stage, sizes, speed, sub-clips
 

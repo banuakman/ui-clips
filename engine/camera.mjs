@@ -54,7 +54,9 @@ export function frameAround(box, geo, stage, { align = "center" } = {}) {
   const cx = box.x + box.w / 2;
   let x = clamp(cx - w / 2, 0, Math.max(0, stage.w - w));
   let y = align === "top" || box.h > h ? box.y : box.y + box.h / 2 - h / 2;
-  y = clamp(y, 0, Math.max(0, geo.canvasH - h));
+  // A focus frame stays inside the stage whenever it fits, so no fill shows below it; only a frame taller than the
+  // stage (or the contain wide) reaches into the fill, top-aligned.
+  y = h <= stage.h ? clamp(y, 0, stage.h - h) : 0;
   return { x, y, w, h };
 }
 const windowScale = (win, geo) => geo.wide.w / win.w;
@@ -174,13 +176,7 @@ export function buildExplicit(shotsIn, { tracks = {}, stage, geo, actions = [] }
     if (shots[i].t < minT) { warnings.push(`camera: shot ${i + 1} at ${Math.round(shots[i].t)} ms moved to ${Math.round(minT)} ms so the previous shot holds ${CAMERA.explicitMinHoldMs} ms`); shots[i].t = minT; }
   }
   for (const s of shots) for (const a of actions) if (a.kind === "click" && a.t > s.t && a.t < s.t + s.ms) { warnings.push(`camera: a click at ${a.t} ms lands during the move starting at ${Math.round(s.t)} ms`); break; }
-  const trackBox = (name, T) => {
-    const samples = tracks[name];
-    if (!samples || !samples.length) return null;
-    let s = samples[0];
-    for (const x of samples) { if (x[0] <= T) s = x; else break; }
-    return { x: s[1], y: s[2], w: s[3], h: s[4] };
-  };
+  const trackBox = (name, T) => trackBoxAt(tracks[name], T);
   let openingWindow = null;
   const targetWindow = (s, T) => {
     if (s.kind === "opening") return openingWindow ? { ...openingWindow } : { ...geo.wide };
@@ -211,6 +207,17 @@ export function buildExplicit(shotsIn, { tracks = {}, stage, geo, actions = [] }
     return { x: from.x + (target.x - from.x) * e, y: from.y + (target.y - from.y) * e, w: from.w + (target.w - from.w) * e, h: from.h + (target.h - from.h) * e };
   };
   return { windowAt, shots, warnings, firstT: shots.length ? shots[0].t : Infinity, opening: openingWindow };
+}
+
+/** A tracked box at time T, interpolated between the samples around T so a follow is a ramp, not a staircase. */
+export function trackBoxAt(samples, T) {
+  if (!samples || !samples.length) return null;
+  let i = 0;
+  while (i + 1 < samples.length && samples[i + 1][0] <= T) i++;
+  const a = samples[i], b = samples[i + 1];
+  if (!b || T <= a[0]) return { x: a[1], y: a[2], w: a[3], h: a[4] };
+  const u = Math.min(1, (T - a[0]) / Math.max(1, b[0] - a[0]));
+  return { x: a[1] + (b[1] - a[1]) * u, y: a[2] + (b[2] - a[2]) * u, w: a[3] + (b[3] - a[3]) * u, h: a[4] + (b[4] - a[4]) * u };
 }
 
 /** The window a moment is really about: when T falls inside an explicit move, the window where that move settles. */

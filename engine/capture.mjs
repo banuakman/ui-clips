@@ -145,10 +145,11 @@ export class RecordTake extends DryTake {
   async _sampleTracks() {
     if (this._sampling) return; this._sampling = true;
     try {
-      for (const [name, loc] of Object.entries(this._trackTargets || {})) {
-        const b = await loc.first().boundingBox({ timeout: 100 }).catch(() => null);
-        if (b && b.width > 0 && b.height > 0) this.trackSample(name, { x: Math.round(b.x), y: Math.round(b.y), w: Math.round(b.width), h: Math.round(b.height) });
-      }
+      // all tracks in one round trip's worth of time, so the sample rate is set by the slowest read, not their sum
+      const entries = Object.entries(this._trackTargets || {});
+      const boxes = await Promise.all(entries.map(([, loc]) => loc.first().boundingBox({ timeout: 100 }).catch(() => null)));
+      const t = this.t();
+      entries.forEach(([name], i) => { const b = boxes[i]; if (b && b.width > 0 && b.height > 0) (this.tracks[name] ||= []).push([t, Math.round(b.x), Math.round(b.y), Math.round(b.width), Math.round(b.height)]); });
     } finally { this._sampling = false; }
   }
   stopTracking() { if (this._trackTimer) clearInterval(this._trackTimer); this._trackTimer = null; }
