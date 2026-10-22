@@ -1,6 +1,16 @@
 # Changelog
 
-## Unreleased (milestone 1: capture)
+## Unreleased (milestone 2: export and camera)
+
+- Loop modes: `return` compares the first frame with the tail (pixelmatch, threshold 0.1, 0.2% tolerance) and trims to the matching frame, warning when none matches; `crossfade` blends the last 400 ms into the head and trims so the last frame equals the first
+- Crops: `{ aspect, focus }`, `{ width, height, focus, scale }` or an explicit rect; focus boxes mapped through the camera; MP4, WebM and poster per crop
+- GIF (12 fps, 960 wide, two-pass palette) and `mp4@2x` outputs; posters as WebP next to PNG (ffmpeg libwebp or cwebp; doctor checks for one)
+- Auto-zoom camera (default `gentle`): click clusters and dwells → shots → critically damped spring → per-frame crop windows rendered from the 2× source in one ffmpeg pass; explicit `h.zoomTo`/`h.zoomOut` keys override; `export --zoom` re-renders without re-recording; checks that the camera is at rest at both ends
+- Contact sheet: `ui-clips sheet <clip>` tiles key frames with a JSON legend
+- Manifest completed (files, posters, crops, camera shots and per-frame windows, loop info, per-step timings) and `out/embed/<id>.html` snippet
+- Example clips `todo-tick` (return loop) and `todo-hover` (crossfade); the demo project exports GIF and a 16:9 crop
+
+## Milestone 1: capture
 
 - Engine: `doctor`, `inspect`, `dry-run`, `record`, `export`, `list`
 - 2× screencast capture via Playwright `page.screencast` with `--force-device-scale-factor`, timestamp retiming to constant fps

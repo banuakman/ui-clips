@@ -3,7 +3,7 @@ import { existsSync } from "node:fs";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { chromiumExecutablePath, launchBrowser, openContext, resolveBase, joinUrl, passPasswordGate } from "./browser.mjs";
-import { ffmpegBin, ffprobeBin } from "./export.mjs";
+import { ffmpegBin, ffprobeBin, webpEncoder } from "./export.mjs";
 
 const exec = promisify(execFile);
 
@@ -29,6 +29,8 @@ export async function doctor(config, { checkUrl = true } = {}) {
   }
   const fp = await version(ffprobeBin());
   add("ffprobe", !!fp, fp || "not found on PATH", installFfmpeg);
+  const webp = webpEncoder();
+  add("webp encoder", !!webp, webp ? `via ${webp}` : "none (poster .webp will be skipped)", process.platform === "darwin" ? "brew install webp" : "install the webp tools (cwebp) or an ffmpeg with libwebp");
 
   let chromePath = null;
   try { chromePath = chromiumExecutablePath(); } catch (e) { chromePath = null; }

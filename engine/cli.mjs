@@ -10,10 +10,12 @@ const USAGE = `ui-clips <command> [args] [--project <dir>] [--json]
   inspect  <url|clip>       visible text, ARIA snapshot, candidate locators (JSON)
   dry-run  [clip|all]       resolve locators, run actions, check expectations; no capture
   record   [clip|all]       capture 2x frames (+ action log)
-  export   [clip|all]       retime, encode presets, poster, manifest
+  export   [clip|all]       camera, loop, presets, crops, posters, GIF, manifest, snippet
+  sheet    <clip>           contact sheet PNG of key frames (needs a recording)
   list                      clips, last recorded, outputs, changed since export
 
-Options: --project <dir>  --json  --changed  --no-url (doctor: skip the URL check)`;
+Options: --project <dir>  --json  --changed  --zoom off|gentle|pronounced (export: re-render without re-recording)
+         --no-url (doctor: skip the URL check)`;
 
 const { values: opts, positionals } = parseArgs({
   allowPositionals: true,
@@ -21,6 +23,7 @@ const { values: opts, positionals } = parseArgs({
     project: { type: "string", short: "p" },
     json: { type: "boolean", default: false },
     changed: { type: "boolean", default: false },
+    zoom: { type: "string" },
     "no-url": { type: "boolean", default: false },
     help: { type: "boolean", short: "h", default: false },
   },
@@ -121,19 +124,31 @@ try {
       if (opts.changed) clips = changedOnly(config, clips);
       const results = [];
       for (const clip of clips) {
-        try { results.push(await exportClip({ config, clip, takeDir: takeDirFor(config, clip), outDir: config.outDir, log })); }
+        try { results.push(await exportClip({ config, clip, takeDir: takeDirFor(config, clip), outDir: config.outDir, log, zoom: opts.zoom })); }
         catch (e) { results.push({ clipId: clip.id, ok: false, error: e.message }); }
       }
       const ok = results.every((r) => r.ok);
       emit({ ok, results }, results.map((r) => r.error
         ? `✗ ${r.clipId}: ${r.error}`
         : `${r.ok ? "✓" : "⚠"} ${r.clipId}: ${(r.durationMs / 1000).toFixed(2)} s · ` +
-          Object.entries(r.files).map(([k, v]) => `${k} ${v.width}×${v.height} ${(v.bytes / 1024).toFixed(0)} KB`).join(" · ") +
-          (r.poster["@2x"] ? ` · poster ${path.basename(r.poster["@2x"].path)}` : "") +
+          Object.entries(r.files).map(([k, v]) => `${k} ${v.width ? v.width + "×" + (v.height || "") + " " : ""}${(v.bytes / 1024).toFixed(0)} KB`).join(" · ") +
+          (r.poster["@2x"] ? ` · poster ${path.basename(r.poster["@2x"].path)}${r.poster["@2xwebp"] ? " +webp" : ""}` : "") +
+          (Object.keys(r.crops || {}).length ? ` · crops ${Object.entries(r.crops).map(([k, v]) => `${k} ${v.window.w}×${v.window.h}${v.note ? " (!)" : ""}`).join(", ")}` : "") +
+          (r.camera?.frames ? ` · camera ${r.camera.mode} (${r.camera.shots.length} shot${r.camera.shots.length === 1 ? "" : "s"})` : "") +
           "\n  " + r.checks.map((c) => `${c.ok ? "✓" : "✗"} ${c.name}: ${c.detail}`).join("\n  ") +
           (r.warnings.length ? "\n  ⚠ " + r.warnings.join("\n  ⚠ ") : "")
       ).join("\n"));
       process.exit(ok ? 0 : 1);
+    }
+    case "sheet": {
+      if (!arg) fail("sheet needs a clip id");
+      const config = await project();
+      const { contactSheet } = await import("./sheet.mjs");
+      const { takeDirFor } = await import("./run.mjs");
+      const [clip] = await loadClips(config, arg);
+      const r = await contactSheet({ config, clip, takeDir: takeDirFor(config, clip), outDir: config.outDir });
+      emit({ ok: true, ...r }, `✓ ${r.path}\n` + r.legend.frames.map((f) => `  ${String(f.cell).padStart(2)}  ${String(f.t).padStart(6)} ms  ${f.label}`).join("\n"));
+      break;
     }
     case "list": {
       const config = await project();

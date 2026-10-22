@@ -2,11 +2,11 @@
 
 Record short, silent, retina-sharp clips and stills of any web UI from a written scenario, so they can be re-recorded in one command whenever the design changes.
 
-**Status: milestone 1 (capture engine).** The engine records and exports; the Claude Code skills that interview you and write clip files arrive in milestone 3. Until then, clip files are written by hand (or by asking Claude with the files below open).
+**Status: milestones 1 and 2 (capture and export engine).** The engine records and exports clips with loops, crops, posters, GIFs and an auto-zoom camera; the Claude Code skills that interview you and write clip files arrive in milestone 3. Until then, clip files are written by hand (or by asking Claude with the files below open).
 
 ## What it does
 
-You describe the moment: "the Today list → type a task → press Enter → the row slides in → tick it". That becomes a small clip file. The engine drives Chromium, captures 2× frames with Playwright's screencast, rebuilds a constant frame rate from the frame timestamps, and exports a fast-start MP4, a WebM, and a lossless poster still, plus a manifest with alt text.
+You describe the moment: "the Today list → type a task → press Enter → the row slides in → tick it". That becomes a small clip file. The engine drives Chromium, captures 2× frames with Playwright's screencast, rebuilds a constant frame rate from the frame timestamps, and exports a fast-start MP4, a WebM, an optional GIF, posters as PNG and WebP at 1× and 2×, named crops, an auto-zoom camera pass, clean loops, a manifest with alt text, and a bare `<video>` snippet.
 
 - **Scripted, not performed.** One small file per clip; identical every take.
 - **Crisp by default.** 2× capture, lanczos downscale, H.264 tuned for flat UI.
@@ -14,7 +14,7 @@ You describe the moment: "the Today list → type a task → press Enter → the
 
 ## Requirements
 
-Node 20+, ffmpeg and ffprobe on PATH (`brew install ffmpeg` on macOS), and Playwright's Chromium (`npx playwright install chromium` from the plugin folder). `ui-clips doctor` checks all of it and prints the fix for anything missing.
+Node 20+, ffmpeg and ffprobe on PATH (`brew install ffmpeg` on macOS), a WebP encoder (`brew install webp`, or an ffmpeg built with libwebp), and Playwright's Chromium (`npx playwright install chromium` from the plugin folder). `ui-clips doctor` checks all of it and prints the fix for anything missing.
 
 ## Quick start (local checkout)
 
@@ -37,9 +37,24 @@ my-clips/
 ├── clips.config.mjs       # target URL (or a local folder to serve), viewport, cursor, outputs
 ├── clips/
 │   └── rm-home.clip.mjs   # one scenario: start route, steps with expectations, alt text, poster moment
-├── .cache/                # takes: 2× frames, poster.png, take.json   (gitignore)
-└── out/                   # rm-home.mp4, rm-home.webm, rm-home.poster.png, rm-home.poster@2x.png, manifest.json
+├── .cache/                # takes: 2× frames, poster.png, take.json, intermediates   (gitignore)
+└── out/                   # rm-home.mp4 / .webm / .gif, posters (.png + .webp, 1× and 2×), crops, manifest.json, embed/rm-home.html
 ```
+
+### Per-clip choices
+
+| Field | Values |
+|---|---|
+| `length` | target ms (the final hold is padded to hit it) or `"natural"` |
+| `loop` | `"return"` (the script ends in the start state; export compares first and last frames with pixelmatch and trims to the matching frame), `"crossfade"` (the last 400 ms blend into the head), `"none"` |
+| `poster` | `"start"`, `"end"`, a millisecond, or a mark name; always a lossless PNG screenshot taken during a hold |
+| `zoom` | `"off"`, `"gentle"` (up to 1.6×), `"pronounced"` (up to 2.2×, capped by the 2× source at export width); overrides the project default, which is `gentle` |
+| `crops` | named windows: `{ aspect: "16:9", focus }`, `{ width, height, focus, scale }` or `{ x, y, width, height }`; `focus` is a mark name whose `h.mark(name, { focus })` recorded a box, or a selector |
+| `freezeTime` | ISO date; the page clock is fixed before navigation |
+
+### The camera
+
+With `zoom` on, the action log drives a virtual camera at export time: two or more actions within 3 s, or a dwell over 1.5 s, open a shot on the cluster's bounding box; the camera follows while actions keep arriving and releases a second after the last one. Position and scale follow a critically damped spring, so there are no cuts and the camera is at rest at both ends. Frames are cropped from the 2× source, so nothing is upscaled. `h.zoomTo` / `h.zoomOut` add explicit keyframes that win over auto detection. Re-render with another setting without re-recording: `ui-clips export <clip> --zoom pronounced`.
 
 The cursor is an injected SVG: `cursor.style` is `"arrow"` by default (a charcoal arrow about 22 px tall with a white outline, hotspot at the tip), with `"dot"` and `"none"` as options; `cursor.color` recolours it for a brand variant.
 
@@ -71,11 +86,12 @@ ui-clips doctor                 environment, URL reachability, password gate
 ui-clips inspect <url|clip>     visible text, ARIA snapshot, candidate locators (JSON)
 ui-clips dry-run [clip|all]     resolve locators, run actions, check expectations; no capture
 ui-clips record  [clip|all]     capture 2× frames (+ action log)
-ui-clips export  [clip|all]     retime, encode presets, poster, manifest
+ui-clips export  [clip|all]     camera, loop, presets, crops, posters, GIF, manifest, snippet
+ui-clips sheet   <clip>         contact sheet PNG of key frames (+ a JSON legend)
 ui-clips list                   clips, last recorded, outputs, changed since export
 ```
 
-`--project <dir>` (default: current folder), `--changed`, `--json` on every command.
+`--project <dir>` (default: current folder), `--changed`, `--json` on every command; `--zoom off|gentle|pronounced` on `export`.
 
 ## How capture works
 
@@ -83,7 +99,6 @@ Playwright's `recordVideo` encodes at CSS-pixel size in realtime, so text goes s
 
 ## Roadmap
 
-- **M2** export: posters as WebP, crops, loop modes (`return` with a pixel comparison, `crossfade`), GIF, contact sheet, `--changed`; auto-zoom camera from the action log (default on)
 - **M3** skills: `new-clip-project`, `author-clip`, `record-clips`
 - **M4** docs, evals, v0.1.0
 

@@ -8,6 +8,7 @@ export default {
   loop: "none",
   poster: "added",
   steps: async ({ page, h }) => {
+    await h.mark("list", { focus: page.locator("ul") });   // crop focus for the project's landscape crop
     await h.hold(600);
     await h.type(page.getByLabel("Add a task"), "Book the studio");
     await h.click(page.getByRole("button", { name: "Add" }), { expect: () => h.visible(page.getByText("Book the studio")) });
@@ -21,6 +22,6 @@ export default {
     });
     await h.waitForMotion();
     await h.parkCursor();
-    await h.hold(1200);
+    await h.hold(1800);
   },
 };
