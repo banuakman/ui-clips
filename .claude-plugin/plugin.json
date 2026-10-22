@@ -1,0 +1,11 @@
+{
+  "name": "ui-clips",
+  "displayName": "UI Clips",
+  "version": "0.1.0-m1",
+  "description": "Record short, scripted, retina-sharp UI clips from any URL with Playwright and ffmpeg.",
+  "author": { "name": "Banu Akman", "url": "https://github.com/banuakman" },
+  "homepage": "https://github.com/banuakman/ui-clips",
+  "repository": "https://github.com/banuakman/ui-clips",
+  "license": "MIT",
+  "keywords": ["playwright", "ffmpeg", "screen-recording", "portfolio", "design"]
+}

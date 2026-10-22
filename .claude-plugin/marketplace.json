@@ -1,0 +1,14 @@
+{
+  "name": "ui-clips",
+  "owner": {
+    "name": "Banu Akman"
+  },
+  "description": "Record short, scripted, retina-sharp UI clips from any URL with Playwright and ffmpeg.",
+  "plugins": [
+    {
+      "name": "ui-clips",
+      "source": "./",
+      "description": "Record short, scripted UI clips."
+    }
+  ]
+}

@@ -1,0 +1,94 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Today · ui-clips demo</title>
+<style>
+  :root {
+    --bg: #f3f4f6; --card: #ffffff; --ink: #111827; --muted: #6b7280; --line: #e5e7eb;
+    --accent: #2563eb; --accent-ink: #ffffff; --done: #9ca3af; --shadow: 0 1px 2px rgba(17,24,39,.06), 0 8px 24px rgba(17,24,39,.08);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg: #0b0f19; --card: #111827; --ink: #f9fafb; --muted: #9ca3af; --line: #1f2937; --accent: #60a5fa; --accent-ink: #0b0f19; --done: #4b5563; --shadow: 0 1px 2px rgba(0,0,0,.4), 0 8px 24px rgba(0,0,0,.5); }
+  }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; }
+  body { margin: 0; background: var(--bg); color: var(--ink); font: 16px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, Roboto, sans-serif; -webkit-font-smoothing: antialiased; display: grid; place-items: start center; padding-top: 200px; }
+  .app { width: 560px; background: var(--card); border-radius: 16px; box-shadow: var(--shadow); padding: 28px 28px 20px; }
+  header { display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 18px; }
+  h1 { font-size: 22px; margin: 0; letter-spacing: -0.01em; }
+  .count { color: var(--muted); font-size: 14px; font-variant-numeric: tabular-nums; }
+  form { display: flex; gap: 10px; margin-bottom: 16px; }
+  input[type=text] { flex: 1; font: inherit; padding: 10px 14px; border: 1px solid var(--line); border-radius: 10px; background: transparent; color: inherit; outline: none; transition: border-color 160ms ease, box-shadow 160ms ease; }
+  input[type=text]:focus { border-color: var(--accent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 22%, transparent); }
+  button.add { font: inherit; font-weight: 600; padding: 10px 16px; border: 0; border-radius: 10px; background: var(--accent); color: var(--accent-ink); cursor: pointer; transition: transform 120ms ease, filter 160ms ease; }
+  button.add:hover { filter: brightness(1.08); }
+  button.add:active { transform: scale(.97); }
+  ul { list-style: none; margin: 0; padding: 0; }
+  li { display: flex; align-items: center; gap: 12px; padding: 12px 10px; border-radius: 10px; transition: background 160ms ease, transform 160ms ease; }
+  li:hover { background: color-mix(in srgb, var(--ink) 4%, transparent); transform: translateX(2px); }
+  li.enter { animation: enter 320ms cubic-bezier(.2,.7,.2,1) both; }
+  @keyframes enter { from { opacity: 0; transform: translateY(-8px); } to { opacity: 1; transform: none; } }
+  .check { width: 22px; height: 22px; border-radius: 50%; border: 2px solid var(--line); display: grid; place-items: center; cursor: pointer; flex: none; transition: border-color 180ms ease, background 180ms ease; background: transparent; padding: 0; }
+  .check svg { width: 12px; height: 12px; stroke: var(--accent-ink); stroke-width: 3; fill: none; stroke-linecap: round; stroke-linejoin: round; stroke-dasharray: 20; stroke-dashoffset: 20; transition: stroke-dashoffset 220ms ease 80ms; }
+  li.done .check { background: var(--accent); border-color: var(--accent); }
+  li.done .check svg { stroke-dashoffset: 0; }
+  .label { flex: 1; position: relative; transition: color 220ms ease; }
+  .label::after { content: ""; position: absolute; left: 0; top: 50%; height: 1.5px; width: 0; background: var(--done); transition: width 260ms cubic-bezier(.2,.7,.2,1); }
+  li.done .label { color: var(--done); }
+  li.done .label::after { width: 100%; }
+  .tag { font-size: 12px; color: var(--muted); background: color-mix(in srgb, var(--ink) 6%, transparent); padding: 2px 8px; border-radius: 999px; }
+  footer { margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--line); color: var(--muted); font-size: 13px; display: flex; justify-content: space-between; }
+</style>
+</head>
+<body>
+  <main class="app" aria-label="Today">
+    <header>
+      <h1>Today</h1>
+      <span class="count" id="count">1 of 3 done</span>
+    </header>
+    <form id="form" autocomplete="off">
+      <input type="text" id="new" placeholder="Add a task" aria-label="Add a task">
+      <button class="add" type="submit">Add</button>
+    </form>
+    <ul id="list">
+      <li><button class="check" aria-label="Mark done"><svg viewBox="0 0 14 14"><path d="M2.5 7.5l3 3 6-7"/></svg></button><span class="label">Review the onboarding flow</span><span class="tag">Design</span></li>
+      <li class="done"><button class="check" aria-label="Mark done"><svg viewBox="0 0 14 14"><path d="M2.5 7.5l3 3 6-7"/></svg></button><span class="label">Send the invoice to Acme</span><span class="tag">Admin</span></li>
+      <li><button class="check" aria-label="Mark done"><svg viewBox="0 0 14 14"><path d="M2.5 7.5l3 3 6-7"/></svg></button><span class="label">Prepare Friday's demo</span><span class="tag">Work</span></li>
+    </ul>
+    <footer><span>Tuesday</span><span>ui-clips demo</span></footer>
+  </main>
+  <script>
+    const list = document.getElementById("list");
+    const count = document.getElementById("count");
+    const form = document.getElementById("form");
+    const input = document.getElementById("new");
+    const CHECK = '<button class="check" aria-label="Mark done"><svg viewBox="0 0 14 14"><path d="M2.5 7.5l3 3 6-7"/></svg></button>';
+    function refresh() {
+      const items = list.querySelectorAll("li");
+      const done = list.querySelectorAll("li.done").length;
+      count.textContent = done + " of " + items.length + " done";
+    }
+    list.addEventListener("click", (e) => {
+      const btn = e.target.closest(".check");
+      if (!btn) return;
+      btn.closest("li").classList.toggle("done");
+      refresh();
+    });
+    form.addEventListener("submit", (e) => {
+      e.preventDefault();
+      const text = input.value.trim();
+      if (!text) return;
+      const li = document.createElement("li");
+      li.className = "enter";
+      li.innerHTML = CHECK + '<span class="label"></span><span class="tag">New</span>';
+      li.querySelector(".label").textContent = text;
+      list.appendChild(li);
+      li.addEventListener("animationend", () => li.classList.remove("enter"), { once: true });
+      input.value = "";
+      refresh();
+    });
+  </script>
+</body>
+</html>

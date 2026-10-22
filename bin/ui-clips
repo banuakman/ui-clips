@@ -1,0 +1,11 @@
+#!/bin/sh
+# ui-clips launcher. Resolves the plugin root from this file's location so it
+# works from the Bash PATH (plugin install), from a local checkout, or via npm link.
+SELF="$0"
+while [ -h "$SELF" ]; do
+  DIR="$(cd "$(dirname "$SELF")" && pwd)"
+  SELF="$(readlink "$SELF")"
+  case "$SELF" in /*) ;; *) SELF="$DIR/$SELF" ;; esac
+done
+ROOT="$(cd "$(dirname "$SELF")/.." && pwd)"
+exec node "$ROOT/engine/cli.mjs" "$@"
