@@ -4,6 +4,8 @@
 
 - Focus shots are `{ anchor, extras, padding }`: the window follows the anchor; extras widen it only while visible; a target leaving the viewport never re-solves or re-centres the window; an anchor off-stage when the shot starts hugs the edge it will enter from and the window follows it in. Legacy `{ focus: [targets] }` maps to anchor + extras
 - Focus frames are placed by their anchor: a short anchor such as a heading sits at the top of the frame so the section below it is what the viewer sees, a tall anchor is centred (`align: "top" | "center"` overrides); the size never shrinks within a shot
+- `align: "top" | "bottom"` on an anchor taller than its frame sizes the window to the anchor's width and shows that slice of it (a drawer's top or bottom); the fit check understands slices
+- The rehearsal stores each beat's measured target boxes (`beats[].targets`) so scripted checks such as "this frame must contain X through Y" can read them
 - `dry-run` now reports the camera plan per beat: absent or off-screen targets, windows that cannot fit the aspect without fill, clicks outside the planned frame, and a closing framing that does not match the opening; it takes a 1× screenshot at every mark
 - `sheet --framing [--size card]`: from the rehearsal, each beat's stage frame with the planned camera window drawn on it beside the crop that window gives, so framing is judged before any recording
 - Spec §6.2, §8, §10.3 and appendix D updated to match (2026-10-22)

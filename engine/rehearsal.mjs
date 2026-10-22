@@ -58,7 +58,8 @@ export function buildRehearsal({ config, clip, take }) {
   const marks = take.marks || [];
   const holdSeqs = (take.holds || []).map((h) => h.seq);
   const beats = marks.map((m) => {
-    const entry = { name: m.name, t: m.t, screenshot: take.beatShots?.[m.name] || null, windows: {} };
+    const entry = { name: m.name, t: m.t, screenshot: take.beatShots?.[m.name] || null, windows: {},
+      targets: m.boxesNow ? Object.fromEntries(Object.entries(m.boxesNow).map(([k, b]) => [k, b ? toStage(b, stage) : null])) : {} };
     const nextHold = holdSeqs.find((q) => q > m.seq) ?? Infinity;
     let chosen = null;
     for (const s of shots) { if (s.seq > m.seq && s.seq < nextHold) { chosen = s.index; break; } }

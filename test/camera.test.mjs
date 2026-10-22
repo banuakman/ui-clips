@@ -217,3 +217,16 @@ test("focusFrame: a short anchor sits at the top of the frame, a tall one is cen
   const grown = focusFrame({ x: 739, y: 582, w: 427, h: 28 }, [], { padding: 24, minSize: { w: 700, h: 875 } }, g, st);
   assert.equal(grown.w, 700, "never shrinks below the size reached so far");
 });
+
+test("align top/bottom on a tall anchor: the window is as wide as the anchor and shows its top or bottom slice", () => {
+  const st = { x: 0, y: 0, w: 1190, h: 1000, masks: [], cuts: [] };
+  const g = frameGeometry(st, { aspect: 0.8, outWidthPx: 960, deviceScaleFactor: 2 });
+  const drawer = { x: 714, y: 0, w: 476, h: 1000 };
+  // the drawer touches the stage's right edge, so the padding is clipped there: 24 + 476 = 500 wide
+  const top = focusFrame(drawer, [], { padding: 24, align: "top" }, g, st);
+  assert.equal(top.w, 500); assert.equal(top.h, 625); assert.equal(top.y, 0); assert.equal(top.x, 1190 - 500);
+  const bottom = focusFrame(drawer, [], { padding: 24, align: "bottom" }, g, st);
+  assert.equal(bottom.w, 500); assert.equal(bottom.y + bottom.h, 1000);
+  const auto = focusFrame(drawer, [], { padding: 24 }, g, st);
+  assert.ok(auto.w >= 800, "without an explicit alignment the frame contains the whole anchor");
+});

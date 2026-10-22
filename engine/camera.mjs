@@ -239,7 +239,13 @@ export function buildExplicit(shotsIn, { tracks = {}, stage, geo, actions = [] }
  */
 export function focusFrame(anchor, extras, { padding = CAMERA.explicitPadding, align = "auto", minSize = null }, geo, stage) {
   const padded = padBox(extras.reduce(union, anchor), stage, { absolute: padding });
-  const sized = frameAround(padded, geo, stage);
+  let sized = frameAround(padded, geo, stage);
+  // An explicit top or bottom alignment on an anchor taller than its frame shows a slice of it: the window is as wide
+  // as the anchor (plus padding and visible extras), never sized to contain the anchor's full height.
+  if ((align === "top" || align === "bottom") && padded.h > padded.w / geo.aspect) {
+    const w = clamp(Math.max(padded.w, geo.floorW), geo.floorW, geo.wide.w);
+    sized = { x: 0, y: 0, w, h: w / geo.aspect };
+  }
   let w = sized.w, h = sized.h;
   if (minSize && minSize.w > w + 0.5) { w = minSize.w; h = minSize.h; }
   const mode = align === "auto" ? (anchor.h < h * 0.25 ? "top" : "center") : align;
@@ -248,8 +254,9 @@ export function focusFrame(anchor, extras, { padding = CAMERA.explicitPadding, a
   // keep visible extras inside horizontally when they fit
   const ux = padded.x, ux1 = padded.x + padded.w;
   if (ux1 - ux <= w) x = clamp(Math.min(x, ux), Math.max(0, ux1 - w), Math.max(0, stage.w - w)) ;
-  let y = mode === "top" ? anchor.y - padding : anchor.y + anchor.h / 2 - h / 2;
+  let y = mode === "top" ? anchor.y - padding : mode === "bottom" ? anchor.y + anchor.h + padding - h : anchor.y + anchor.h / 2 - h / 2;
   if (mode === "top" && extras.length) y = Math.min(y, padded.y);
+  if (mode === "bottom" && extras.length) y = Math.max(y, padded.y + padded.h - h);
   y = h <= stage.h ? clamp(y, 0, stage.h - h) : 0;
   return { x, y, w, h };
 }
@@ -289,7 +296,8 @@ export function plannedWindow(shot, boxes, { geo, stage, opening }) {
   const extras = [];
   for (const tg of shot.extras || []) { const v = clipToStage(raw(tg), stage); if (v) extras.push(v); }
   const padded = padBox(u, stage, { absolute: shot.padding ?? CAMERA.explicitPadding });
-  const need = Math.max(padded.w, padded.h * geo.aspect);
+  const slice = (shot.align === "top" || shot.align === "bottom") && padded.h > padded.w / geo.aspect;   // a slice of a tall anchor
+  const need = slice ? Math.max(padded.w, geo.floorW) : Math.max(padded.w, padded.h * geo.aspect);
   if (need > geo.wide.w + 0.5 || need / geo.aspect > stage.h + 0.5) problems.push(`anchor and extras need a ${Math.round(need)}×${Math.round(need / geo.aspect)} frame; the stage allows ${Math.round(geo.wide.w)}×${Math.round(stage.h)} at this aspect, so fill would show`);
   return { window: focusFrame(a, extras, { padding: shot.padding, align: shot.align }, geo, stage), problems };
 }
