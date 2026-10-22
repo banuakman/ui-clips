@@ -79,7 +79,7 @@ export function normaliseSizes(config, clip, stage) {
     aspect = cssW / cssH;
     const scale = s.scale || (s.aspect && !s.width ? W / cssW : 1);
     const focus = s.focus ?? "auto";
-    out.push({ name, aspect, outW: even(Math.round(cssW * scale)), outH: even(Math.round(cssH * scale)), scale, cssW, cssH, mode: focus === "auto" ? "camera" : "static", focus });
+    out.push({ name, aspect, outW: even(Math.round(cssW * scale)), outH: even(Math.round(cssH * scale)), scale, explicitScale: !!s.scale, cssW, cssH, mode: focus === "auto" ? "camera" : "static", focus });
   }
   return out;
 }
@@ -169,7 +169,7 @@ export async function exportClip({ config, clip, takeDir, outDir, log = () => {}
   const renderFullAt2x = !fast && (outputs.has("mp4@2x") || true) && full && W * dsf <= stage.w * dsf;   // keep 2× for sharp posters/@2x; fast → export width
   const plans = [];
   for (const sz of sizes) {
-    const info = { name: sz.name, outW: sz.outW, outH: sz.outH, scale: sz.scale, mode: sz.mode };
+    const info = { name: sz.name, outW: sz.outW, outH: sz.outH, scale: sz.scale, explicitScale: sz.explicitScale, mode: sz.mode };
     const renderW = sz.full ? (fast ? W : Math.min(W * dsf, even(stage.w * dsf))) : sz.outW;
     const renderH = even(Math.round(renderW / sz.aspect));
     let frames = null, geo = frameGeometry(stage, { aspect: sz.aspect, outWidthPx: sz.outW, deviceScaleFactor: dsf }), padBelow = geo.padBelow, staticWin = null;
@@ -225,7 +225,10 @@ export async function exportClip({ config, clip, takeDir, outDir, log = () => {}
     info.render.file = file; info.render.canvasH = canvasH;
     if (frames) {
       const restStart = atRest(frames[0], geo), restEnd = atRest(frames[frames.length - 1], geo);
-      if (!clip.isSubclip && mode !== "off") check(`camera rest (${sz.name})`, restStart && restEnd, `${restStart ? "wide" : frames[0].scale.toFixed(2) + "×"} at start, ${restEnd ? "wide" : frames[frames.length - 1].scale.toFixed(2) + "×"} at end`);
+      const explicitTrack = info.shots.some((s) => s.source === "explicit");
+      const detail = `${restStart ? "wide" : frames[0].scale.toFixed(2) + "×"} at start, ${restEnd ? "wide" : frames[frames.length - 1].scale.toFixed(2) + "×"} at end`;
+      if (!clip.isSubclip && mode !== "off" && !explicitTrack) check(`camera rest (${sz.name})`, restStart && restEnd, detail);
+      else if (!clip.isSubclip && explicitTrack && !(restStart && restEnd)) result.warnings.push(`camera (${sz.name}): the explicit track ends ${detail.split(", ")[1]}; the loop or cut carries the return`);
       const minW = Math.min(...frames.map((f) => f.w));
       check(`camera floor (${sz.name})`, minW >= geo.floorW - 0.5, `narrowest window ${Math.round(minW)} CSS px, floor ${Math.round(geo.floorW)} (half of ${sz.outW} px)`);
     }
@@ -276,7 +279,7 @@ export async function exportClip({ config, clip, takeDir, outDir, log = () => {}
   const fileName = (szName, variant, ext) => szName === "full" ? `${clip.id}${variant}.${ext}` : `${clip.id}.${szName}${variant}.${ext}`;
   for (const sz of Object.values(result.sizes)) {
     const src = sz.render.source;
-    const variants = sz.scale === 1 || sz.name === "full" ? [{ suffix: "", w: sz.outW, h: sz.outH }] : [{ suffix: "", w: sz.outW, h: sz.outH }, { suffix: "@1x", w: even(sz.outW / sz.scale), h: even(sz.outH / sz.scale) }];
+    const variants = !sz.explicitScale || sz.scale === 1 || sz.name === "full" ? [{ suffix: "", w: sz.outW, h: sz.outH }] : [{ suffix: "", w: sz.outW, h: sz.outH }, { suffix: "@1x", w: even(sz.outW / sz.scale), h: even(sz.outH / sz.scale) }];
     for (const v of variants) {
       const scaleF = v.w === sz.render.w && v.h === sz.render.h ? null : lanczos(v.w, v.h);
       const vfArgs = scaleF ? ["-vf", scaleF] : [];
@@ -328,7 +331,7 @@ export async function exportClip({ config, clip, takeDir, outDir, log = () => {}
       const cropF = `crop=${even(win.w * dsf)}:${even(win.h * dsf)}:${even(win.x * dsf)}:${even(win.y * dsf)}`;
       const outs = sz.name === "full"
         ? [{ suffix: "@2x", w: even(win.w * dsf), h: even(win.h * dsf) }, { suffix: "", w: sz.outW, h: sz.outH }]
-        : (sz.scale === 1 ? [{ suffix: "", w: sz.outW, h: sz.outH }] : [{ suffix: "", w: sz.outW, h: sz.outH }, { suffix: "@1x", w: even(sz.outW / sz.scale), h: even(sz.outH / sz.scale) }]);
+        : (!sz.explicitScale || sz.scale === 1 ? [{ suffix: "", w: sz.outW, h: sz.outH }] : [{ suffix: "", w: sz.outW, h: sz.outH }, { suffix: "@1x", w: even(sz.outW / sz.scale), h: even(sz.outH / sz.scale) }]);
       for (const o of outs) {
         const f = path.join(outDir, sz.name === "full" ? `${clip.id}.poster${o.suffix}.png` : `${clip.id}.${sz.name}${o.suffix}.poster.png`);
         if (posterSrc && existsSync(posterSrc)) await ff(["-i", posterSrc, "-vf", `${canvas},${cropF},${lanczos(o.w, o.h)}`, f]);
@@ -347,8 +350,9 @@ export async function exportClip({ config, clip, takeDir, outDir, log = () => {}
   if (typeof clip.length === "number") { const diff = Math.abs(durationMs - clip.length); check("length", diff <= 200, `${durationMs} ms vs target ${clip.length} ms`); }
   const mp4 = result.files["full.mp4"];
   if (mp4) {
-    const budget = 2 * 1024 * 1024 * (durationMs / 8000) * (W / 1440);
-    check("mp4 size", mp4.bytes <= budget, `${(mp4.bytes / 1024).toFixed(0)} KB, budget ${(budget / 1024).toFixed(0)} KB`);
+    // §13: under 2 MB for 8 s at 1440×900; prorated by length and by frame area for other stages.
+    const budget = 2 * 1024 * 1024 * (durationMs / 8000) * ((mp4.width * mp4.height) / (1440 * 900));
+    check("mp4 size", mp4.bytes <= budget, `${(mp4.bytes / 1024).toFixed(0)} KB, budget ${(budget / 1024).toFixed(0)} KB for ${mp4.width}×${mp4.height}`);
     check("mp4 timing", mp4.frames === outFrames && Math.abs(mp4.durationMs - durationMs) <= 1000 / fps + 1, `${mp4.frames} frames / ${mp4.durationMs} ms encoded vs ${outFrames} frames / ${durationMs} ms timeline`);
   }
   if (result.files["full.gif"]) check("gif size", result.files["full.gif"].bytes <= 5 * 1024 * 1024, `${(result.files["full.gif"].bytes / 1024).toFixed(0)} KB, limit 5120 KB`);

@@ -261,11 +261,15 @@ export function createHelpers({ page, config, take, fast = false }) {
       } catch (e) { throw new StepError(label, e); }
     },
 
-    async scrollTo(target, { within, align = "center", ms } = {}) {
+    async scrollTo(target, { within, align = "center", ms, ifNeeded = false } = {}) {
       const label = `scrollTo ${describe(target)}`;
       try {
         const loc = target.first ? target.first() : target;
         const cb = within ? await boxOf(within) : { x: 0, y: 0, width: vw, height: vh };
+        if (ifNeeded) {   // skip when the target is already fully visible inside the container and the viewport
+          const tb0 = await loc.boundingBox({ timeout: 5000 });
+          if (tb0 && tb0.y >= cb.y && tb0.y + tb0.height <= Math.min(cb.y + cb.height, vh)) return;
+        }
         // Layout can still be growing (a section that just rendered): re-check and retry a few times.
         for (let attempt = 0; attempt < 4; attempt++) {
           const tb = await loc.boundingBox({ timeout: 5000 });

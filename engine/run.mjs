@@ -53,9 +53,13 @@ export async function runClip({ browser, baseUrl, config, clip, mode = "dry", ta
     await h._measureCropFocus("end");
     // Target length: pad the final hold, or warn when the steps already overshoot.
     if (typeof clip.length === "number") {
+      const { buildTimeMap } = await import("./timemap.mjs");
       const elapsed = take.t();
-      if (elapsed < clip.length) await h.hold(clip.length - elapsed);
-      else if (elapsed > clip.length + 200) take.warn(`steps ran ${elapsed} ms, longer than the ${clip.length} ms target`);
+      const outElapsed = Math.round(buildTimeMap(take.speeds || [], elapsed).toOutput(elapsed));   // speed ramps shorten the export
+      const fade = clip.loop === "crossfade" ? 400 : 0;                                             // the crossfade trims the head
+      const target = clip.length + fade;
+      if (outElapsed < target) await h.hold(target - outElapsed);
+      else if (outElapsed > target + 200) take.warn(`steps ran ${outElapsed} ms (after speed ramps), longer than the ${target} ms needed for a ${clip.length} ms clip`);
     }
     const posterAtEnd = !take.poster.taken && clip.poster !== "start";
     if (posterAtEnd && clip.poster !== "end") take.warn(`poster "${clip.poster}" was never reached; using the end frame`);

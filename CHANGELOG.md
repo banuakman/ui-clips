@@ -12,6 +12,7 @@
 - WebP stays a soft dependency (ffmpeg libwebp, else cwebp, else skipped with a note); record fails on wrong frame size
 - Rendering: one stage canvas pass per export, then each size's camera pass reads it straight from the decoder (a dynamic crop behind another filter segfaults ffmpeg 9)
 - Demo: todo-add has marks, tracks, an explicit track, a sped-up typing stretch, a footer stage mask and a `todo-add-tick` sub-clip
+- From the pilot: the MP4 size budget is prorated by frame area as well as length; the rest-at-both-ends check is informational for explicit tracks (a storyboard may end on a focus and let the loop carry the return); the length target counts output time after speed ramps and the crossfade trim; aspect-only sizes no longer produce an `@1x` variant; `h.scrollTo(..., { ifNeeded: true })` skips a scroll when the target is already in view
 
 ## Milestone 2: export and camera
 
