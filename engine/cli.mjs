@@ -14,8 +14,10 @@ const USAGE = `ui-clips <command> [args] [--project <dir>] [--json]
   sheet    <clip>           contact sheet PNG of key frames (needs a recording)
   list                      clips, last recorded, outputs, changed since export
 
-Options: --project <dir>  --json  --changed  --zoom off|gentle|pronounced (export: re-render without re-recording)
-         --no-url (doctor: skip the URL check)`;
+Options: --project <dir>  --json  --changed
+         export: --zoom off|gentle|pronounced  --feel brisk|calm|lazy  (re-render the camera from the same take)
+                 --fast (faster VP9, no GIF, camera at export width)
+         sheet:  --beats (one frame per mark)      doctor: --no-url`;
 
 const { values: opts, positionals } = parseArgs({
   allowPositionals: true,
@@ -24,6 +26,9 @@ const { values: opts, positionals } = parseArgs({
     json: { type: "boolean", default: false },
     changed: { type: "boolean", default: false },
     zoom: { type: "string" },
+    feel: { type: "string" },
+    fast: { type: "boolean", default: false },
+    beats: { type: "boolean", default: false },
     "no-url": { type: "boolean", default: false },
     help: { type: "boolean", short: "h", default: false },
   },
@@ -66,7 +71,7 @@ function changedOnly(config, clips) {
   });
 }
 
-const fmtResult = (r) => r.ok
+const fmtResult = (r) => r.skipped ? `· ${r.clipId}: ${r.skipped}` : r.ok
   ? `✓ ${r.clipId}: ${r.mode === "record" ? `${r.frames} frames (${r.frameSize?.width}×${r.frameSize?.height})` : `${r.actions} actions`} in ${(r.durationMs / 1000).toFixed(2)} s${r.warnings?.length ? "\n  ⚠ " + r.warnings.join("\n  ⚠ ") : ""}`
   : `✗ ${r.clipId}: ${r.error.kind}${r.error.step ? ` at step "${r.error.step}"` : ""}: ${r.error.message}`;
 
@@ -124,7 +129,7 @@ try {
       if (opts.changed) clips = changedOnly(config, clips);
       const results = [];
       for (const clip of clips) {
-        try { results.push(await exportClip({ config, clip, takeDir: takeDirFor(config, clip), outDir: config.outDir, log, zoom: opts.zoom })); }
+        try { results.push(await exportClip({ config, clip, takeDir: takeDirFor(config, clip), outDir: config.outDir, log, zoom: opts.zoom, feel: opts.feel, fast: opts.fast })); }
         catch (e) { results.push({ clipId: clip.id, ok: false, error: e.message }); }
       }
       const ok = results.every((r) => r.ok);
@@ -132,9 +137,8 @@ try {
         ? `✗ ${r.clipId}: ${r.error}`
         : `${r.ok ? "✓" : "⚠"} ${r.clipId}: ${(r.durationMs / 1000).toFixed(2)} s · ` +
           Object.entries(r.files).map(([k, v]) => `${k} ${v.width ? v.width + "×" + (v.height || "") + " " : ""}${(v.bytes / 1024).toFixed(0)} KB`).join(" · ") +
-          (r.poster["@2x"] ? ` · poster ${path.basename(r.poster["@2x"].path)}${r.poster["@2xwebp"] ? " +webp" : ""}` : "") +
-          (Object.keys(r.crops || {}).length ? ` · crops ${Object.entries(r.crops).map(([k, v]) => `${k} ${v.window.w}×${v.window.h}${v.note ? " (!)" : ""}`).join(", ")}` : "") +
-          (r.camera?.frames ? ` · camera ${r.camera.mode} (${r.camera.shots.length} shot${r.camera.shots.length === 1 ? "" : "s"})` : "") +
+          (r.poster?.full ? ` · posters ${Object.keys(r.poster).filter((k) => r.poster[k]?.path).length}${r.poster.full.webp ? " +webp" : ""}` : "") +
+          (r.sizes ? ` · sizes ${Object.values(r.sizes).map((v) => `${v.name} ${v.outW}×${v.outH} ${v.mode === "camera" ? `${v.zoom}/${v.feel}${(v.shots || []).some((s) => s.source === "explicit") ? " explicit" : ""}` : "static"}${v.note ? " (!)" : ""}`).join(", ")}` : "") +
           "\n  " + r.checks.map((c) => `${c.ok ? "✓" : "✗"} ${c.name}: ${c.detail}`).join("\n  ") +
           (r.warnings.length ? "\n  ⚠ " + r.warnings.join("\n  ⚠ ") : "")
       ).join("\n"));
@@ -146,7 +150,7 @@ try {
       const { contactSheet } = await import("./sheet.mjs");
       const { takeDirFor } = await import("./run.mjs");
       const [clip] = await loadClips(config, arg);
-      const r = await contactSheet({ config, clip, takeDir: takeDirFor(config, clip), outDir: config.outDir });
+      const r = await contactSheet({ config, clip, takeDir: takeDirFor(config, clip), outDir: config.outDir, beats: opts.beats });
       emit({ ok: true, ...r }, `✓ ${r.path}\n` + r.legend.frames.map((f) => `  ${String(f.cell).padStart(2)}  ${String(f.t).padStart(6)} ms  ${f.label}`).join("\n"));
       break;
     }

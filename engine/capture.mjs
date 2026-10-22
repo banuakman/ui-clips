@@ -16,6 +16,12 @@ export class DryTake {
     this.warnings = [];
     this.poster = { mode: clip.poster ?? "end", pending: false, taken: false, at: null };
     this._trimOpen = null;
+    this.shots = [];          // explicit camera shots (h.shot / zoomTo / zoomOut)
+    this.speeds = [];         // h.speed ranges in take time
+    this.tracks = {};         // name → [[t, x, y, w, h]]
+    this.markShots = {};      // mark name → png file (lossless screenshot at the next hold)
+    this.pendingMarks = [];
+    this.stage = null;
   }
   get recording() { return false; }
   start() { this.t0 = Date.now(); }
@@ -24,7 +30,14 @@ export class DryTake {
   mark(name, { box } = {}) {
     this.marks.push({ name, t: this.t(), ...(box ? { box } : {}) });
     if (name === this.poster.mode && !this.poster.taken) this.poster.pending = true;
+    this.pendingMarks.push(name);
   }
+  shot(entry) { this.shots.push({ t: this.t(), ...entry }); }
+  speedStart() { return this.t(); }
+  speedEnd(from, factor) { this.speeds.push({ from, to: this.t(), factor }); }
+  trackSample(name, box) { (this.tracks[name] ||= []).push([this.t(), box.x, box.y, box.w, box.h]); }
+  /** Screenshots for every mark reached since the last hold (sub-clip posters); no-op for a dry take. */
+  async takeMarkShots() { this.pendingMarks = []; return 0; }
   /** Record where a crop's focus element is at a given moment (last visible measurement wins at export). */
   focus(crop, box, at) { (this.focusBoxes ||= []).push({ crop, at, t: this.t(), box }); }
   trimStart() { this._trimOpen = this.t(); }
@@ -45,6 +58,8 @@ export class DryTake {
     return 0;
   }
   async finish() { return { durationMs: this.t() }; }
+  startTracking() {}
+  stopTracking() {}
 }
 
 /** Pixel size from a JPEG buffer's SOF marker (the screencast metadata reports CSS pixels, not the bitmap). */
@@ -106,9 +121,43 @@ export class RecordTake extends DryTake {
     return this.poster.wallMs;
   }
 
+  async takeMarkShots() {
+    const names = this.pendingMarks; this.pendingMarks = [];
+    let spent = 0;
+    for (const name of names) {
+      if (this.markShots[name]) continue;
+      const started = Date.now();
+      if (name === this.poster.mode && this.poster.file) { this.markShots[name] = this.poster.file; continue; }
+      const png = await this.page.screenshot({ type: "png", animations: "allow", caret: "hide", scale: "device" });
+      const file = `mark-${name.replace(/[^\w.-]+/g, "_")}.png`;
+      await writeFile(path.join(this.takeDir, file), png);
+      this.markShots[name] = file;
+      spent += Date.now() - started;
+    }
+    return spent;
+  }
+
+  /** Sample tracked targets every frame (≈ fps) while recording. */
+  startTracking(targets, fps = 30) {
+    this._trackTargets = targets;
+    this._trackTimer = setInterval(() => this._sampleTracks().catch(() => {}), Math.round(1000 / fps));
+  }
+  async _sampleTracks() {
+    if (this._sampling) return; this._sampling = true;
+    try {
+      for (const [name, loc] of Object.entries(this._trackTargets || {})) {
+        const b = await loc.first().boundingBox({ timeout: 100 }).catch(() => null);
+        if (b && b.width > 0 && b.height > 0) this.trackSample(name, { x: Math.round(b.x), y: Math.round(b.y), w: Math.round(b.width), h: Math.round(b.height) });
+      }
+    } finally { this._sampling = false; }
+  }
+  stopTracking() { if (this._trackTimer) clearInterval(this._trackTimer); this._trackTimer = null; }
+
   async finish({ posterAtEnd = false } = {}) {
+    this.stopTracking();
     this.tEnd = Date.now();
     if (posterAtEnd) await this.takePoster("end");
+    if (this.pendingMarks.length) await this.takeMarkShots();
     await this.page.screencast.stop();
     await this._chain;
     if (this._error) throw this._error;
@@ -128,6 +177,11 @@ export class RecordTake extends DryTake {
       marks: this.marks,
       trims: this.trims,
       camera: this.camera,
+      shots: this.shots,
+      speeds: this.speeds,
+      tracks: this.tracks,
+      markShots: this.markShots,
+      stage: this.stage,
       focusBoxes: this.focusBoxes || [],
       poster: this.poster,
       warnings: this.warnings,

@@ -49,12 +49,24 @@ my-clips/
 | `loop` | `"return"` (the script ends in the start state; export compares first and last frames with pixelmatch and trims to the matching frame), `"crossfade"` (the last 400 ms blend into the head), `"none"` |
 | `poster` | `"start"`, `"end"`, a millisecond, or a mark name; always a lossless PNG screenshot taken during a hold |
 | `zoom` | `"off"`, `"gentle"` (up to 1.6×), `"pronounced"` (up to 2.2×, capped by the 2× source at export width); overrides the project default, which is `gentle` |
-| `crops` | named windows: `{ aspect: "16:9", focus }`, `{ width, height, focus, scale }` or `{ x, y, width, height }`; `focus` is a mark name whose `h.mark(name, { focus })` recorded a box, or a selector |
+| `camera` | `{ feel: "brisk" \| "calm" \| "lazy" }` override of the project's spring |
+| `crops` | extra output sizes for this clip, same shapes as the project's `sizes` |
 | `freezeTime` | ISO date; the page clock is fixed before navigation |
+| `take`, `from`, `to` | a **sub-clip**: cut from another clip's take between two marks (or `"start"`/`"end"`/ms), with its own id, poster and manifest entry; never recorded itself |
+
+### Output sizes, stage and fill
+
+`sizes` in the project config lists what every clip exports: `full: true` is the stage at the export width; `card: { width: 480, height: 600, scale: 2, focus: "auto" }` is a 4:5 card at 960×1200 framed by the camera; `{ aspect: "16:9", focus: "list" }` is a static window on a mark or selector. A `focus` on something taller than the window aligns to its top. `stage.exclude` lists elements or rects that never appear in any frame: regions along an edge (a sidebar) are cut away, interior ones are masked with `stage.fill` and follow the element if it moves. A wide shot fits the stage to the output width, top-aligned, with the fill below, so a portrait card of a landscape page reads as the page continuing.
 
 ### The camera
 
-With `zoom` on, the action log drives a virtual camera at export time: two or more actions within 3 s, or a dwell over 1.5 s, open a shot on the cluster's bounding box; the camera follows while actions keep arriving and releases a second after the last one. Position and scale follow a critically damped spring, so there are no cuts and the camera is at rest at both ends. Frames are cropped from the 2× source, so nothing is upscaled. `h.zoomTo` / `h.zoomOut` add explicit keyframes that win over auto detection. Re-render with another setting without re-recording: `ui-clips export <clip> --zoom pronounced`.
+Two ways to direct it, which can mix; explicit wins in its window.
+
+**Auto** (`zoom` on): the action log drives the camera at export time. Two or more actions within 3 s, or a dwell over 1.5 s, open a shot on the cluster's padded box; the box grows while actions land inside or near it; an action further out than a quarter of the shot's width starts a new shot, so the camera moves; a box wider than 65% of the stage stays wide. The shot releases a second after the last action, with a 1.2 s minimum and a rest before the end. Position and scale follow a critically damped spring whose `camera.feel` is `brisk` (about half a second), `calm` (just under a second, default) or `lazy`.
+
+**Explicit**: a track keyed to marks, written in the clip. `h.shot("wide")` or `h.shot({ focus: [targets], padding: 24 }, { ms: 600 })` sets the next frame: the smallest frame of the output aspect containing the targets, never narrower than half the output width in CSS px. Moves ease in-out over the stated duration, each shot holds at least 600 ms, and a click inside a move is flagged. Targets are locators (box measured at the shot) or names from `h.track(name, locator)`, whose box is sampled every frame so the focus follows a scrolling drawer. `h.speed(factor, fn)` plays a stretch faster at export with the frames resampled.
+
+Every output size gets its own track for its aspect, rendered from the 2× source in one ffmpeg pass per size, so nothing is upscaled. Re-render without re-recording: `ui-clips export <clip> --zoom pronounced --feel brisk`, or `--fast` while iterating (faster VP9, no GIF, camera at export width).
 
 The cursor is an injected SVG: `cursor.style` is `"arrow"` by default (a charcoal arrow about 22 px tall with a white outline, hotspot at the tip), with `"dot"` and `"none"` as options; `cursor.color` recolours it for a brand variant.
 
@@ -73,7 +85,10 @@ See [`examples/_template/`](examples/_template/) for an annotated config and cli
 | `h.hold(ms)` | Hold the frame (the poster is taken at the start of a hold, without stretching it) |
 | `h.waitForMotion()` | Wait for CSS animations and transitions to finish |
 | `h.visible(l)` / `h.hidden(l)` / `h.text(l, s)` | Expectations for `expect` |
-| `h.mark(name)` | Name a moment (poster, crop focus, zoom target) |
+| `h.mark(name, { focus })` | Name a moment (poster, sub-clip boundary, crop focus); a lossless screenshot is taken at the next hold |
+| `h.shot("wide" \| { focus, padding }, { ms })` | Explicit camera keyframe (see The camera) |
+| `h.track(name, locator)` | Sample a target's box every frame so a focus shot can follow it |
+| `h.speed(factor, fn)` | Run a step; that stretch plays `factor`× faster at export |
 | `h.trim(fn)` | Run a step but cut its wait from the video |
 | `h.parkCursor()` | Ease the cursor off and fade it out |
 | `h.freezeTime(date)` | Fix the page clock |
@@ -87,11 +102,11 @@ ui-clips inspect <url|clip>     visible text, ARIA snapshot, candidate locators 
 ui-clips dry-run [clip|all]     resolve locators, run actions, check expectations; no capture
 ui-clips record  [clip|all]     capture 2× frames (+ action log)
 ui-clips export  [clip|all]     camera, loop, presets, crops, posters, GIF, manifest, snippet
-ui-clips sheet   <clip>         contact sheet PNG of key frames (+ a JSON legend)
+ui-clips sheet   <clip>         contact sheet PNG of key frames (+ a JSON legend); --beats for one frame per mark
 ui-clips list                   clips, last recorded, outputs, changed since export
 ```
 
-`--project <dir>` (default: current folder), `--changed`, `--json` on every command; `--zoom off|gentle|pronounced` on `export`.
+`--project <dir>` (default: current folder), `--changed`, `--json` on every command; `export` takes `--zoom`, `--feel` and `--fast`.
 
 ## How capture works
 

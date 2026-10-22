@@ -7,7 +7,7 @@ export default {
   length: 7000,
   loop: "return",                 // ends in the start state; export checks first vs last frame
   poster: "ticked",
-  zoom: "gentle",
+  zoom: "gentle",                 // auto camera, project feel (calm)
   steps: async ({ page, h }) => {
     const row = page.locator("li", { hasText: "Review the onboarding flow" });
     await h.mark("list", { focus: page.locator("ul") });

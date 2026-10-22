@@ -38,6 +38,7 @@ export function createHelpers({ page, config, take, fast = false }) {
   const cur = { ...park };
   const rand = seededRandom(7);
   let stepNo = 0;
+  const trackTargets = {};
 
   async function cursorHide() { await page.evaluate(() => window.__uiclips?.hide()).catch(() => {}); }
   async function cursorShow() { await page.evaluate(() => window.__uiclips?.show()).catch(() => {}); }
@@ -177,10 +178,10 @@ export function createHelpers({ page, config, take, fast = false }) {
       await runExpect(expect, label);
     },
 
-    async type(target, text, { cps = 12, expect, clear = false, stepAside = { x: 32, y: 24, ms: 250 } } = {}) {
+    async type(target, text, { cps = 12, expect, clear = false, click = true, stepAside = { x: 32, y: 24, ms: 250 } } = {}) {
       const label = `type "${text}" into ${describe(target)}`;
       try {
-        await h.click(target);
+        if (click) await h.click(target);                       // click: false when the field was clicked already
         const clickPoint = { x: cur.x, y: cur.y };
         // Step aside (appendix D): ease the arrow down-right of the click point so the caret and words stay uncovered.
         let aside = null;
@@ -286,10 +287,11 @@ export function createHelpers({ page, config, take, fast = false }) {
       } catch (e) { throw new StepError(label, e); }
     },
 
-    /** Hold the frame. Takes the pending poster at the start of the hold, without stretching it. */
+    /** Hold the frame. Pending poster and mark screenshots are taken at the start of the hold, without stretching it. */
     async hold(ms) {
       let spent = 0;
-      if (take.posterDue()) spent = await take.takePoster("hold");
+      if (take.posterDue()) spent += await take.takePoster("hold");
+      if (take.pendingMarks?.length) spent += await take.takeMarkShots();
       if (!fast) await sleep(ms - spent);
     },
 
@@ -319,11 +321,29 @@ export function createHelpers({ page, config, take, fast = false }) {
 
     async trim(fn) { take.trimStart(); try { await fn(); } finally { take.trimEnd(); } },
 
-    async zoomTo(target, { scale = 1.6, ms = 600 } = {}) {
-      const box = typeof target === "string" ? { x: 0, y: 0, width: vw, height: vh, mark: target } : await boxOf(target);
-      take.cameraKey({ kind: "zoomTo", box, scale, ms });
+    /**
+     * Explicit camera shot (§10.3): "wide", or { focus: [targets], padding }. Targets are locators (box measured now)
+     * or track names (per-frame boxes from h.track). The move eases in-out over `ms` and is rendered at export.
+     */
+    async shot(spec, { ms = 600 } = {}) {
+      if (spec === "wide") { take.shot({ kind: "wide", ms }); return; }
+      const targets = [];
+      for (const tg of spec.focus || []) {
+        if (typeof tg === "string") targets.push({ track: tg });
+        else { const b = await boxOf(tg, { scrollIntoView: false }).catch(() => null); if (b) targets.push({ box: roundBox(b), locator: describe(tg) }); else take.warn(`shot: target ${describe(tg)} has no box at ${take.t()} ms`); }
+      }
+      take.shot({ kind: "focus", targets, padding: spec.padding ?? 24, ms });
     },
-    async zoomOut({ ms = 600 } = {}) { take.cameraKey({ kind: "zoomOut", ms }); },
+    /** Register a target whose on-screen box is sampled every frame of the take, so a focus shot can follow it. */
+    track(name, locator) {
+      trackTargets[name] = locator;
+      take.startTracking?.(trackTargets, config.fps);
+    },
+    /** Run a step; at export that stretch of the take plays `factor`× faster. */
+    async speed(factor, fn) { const from = take.speedStart(); try { await fn(); } finally { take.speedEnd(from, factor); } },
+    // shorthands
+    async zoomTo(target, { ms = 600, padding = 24 } = {}) { await h.shot({ focus: [target], padding }, { ms }); },
+    async zoomOut({ ms = 600 } = {}) { await h.shot("wide", { ms }); },
 
     async parkCursor({ ms = 500 } = {}) {
       await moveToPoint(park, { ms });

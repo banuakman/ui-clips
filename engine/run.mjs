@@ -13,6 +13,7 @@ export function takeDirFor(config, clip, takeId = "latest") {
  */
 export async function runClip({ browser, baseUrl, config, clip, mode = "dry", takeId = "latest", log = () => {} }) {
   const record = mode === "record";
+  if (clip.isSubclip) return { ok: true, clipId: clip.id, mode, durationMs: 0, warnings: [], skipped: `sub-clip of ${clip.take}; nothing to ${record ? "record" : "rehearse"}` };
   const context = await openContext(browser, config, { cursor: record });
   const page = await context.newPage();
   const result = { ok: false, clipId: clip.id, mode, durationMs: 0, warnings: [] };
@@ -26,8 +27,22 @@ export async function runClip({ browser, baseUrl, config, clip, mode = "dry", ta
     take = record
       ? new RecordTake({ clip, config, page, takeDir: takeDirFor(config, clip, takeId) })
       : new DryTake({ clip, config });
-    const runConfig = { ...config, crops: { ...(config.crops || {}), ...(clip.crops || {}) } };
+    const runConfig = { ...config, crops: { ...(config.crops || {}), ...(config.sizes || {}), ...(clip.crops || {}) } };
     const h = createHelpers({ page, config: runConfig, take, fast: !record });
+    // Stage exclusions (§10.3): measure selectors once the page is ready; rects pass through.
+    if (config.stage?.exclude?.length) {
+      const boxes = [];
+      for (const ex of config.stage.exclude) {
+        if (typeof ex === "string") {
+          const b = await page.locator(ex).first().boundingBox({ timeout: 2000 }).catch(() => null);
+          if (b) {
+            boxes.push({ x: Math.round(b.x), y: Math.round(b.y), w: Math.round(b.width), h: Math.round(b.height), selector: ex, track: `__stage:${ex}` });
+            h.track(`__stage:${ex}`, page.locator(ex));      // the region follows the element if it moves
+          } else take.warn(`stage.exclude "${ex}" matched nothing`);
+        } else if (ex && ex.w > 0 && ex.h > 0) boxes.push({ ...ex });
+      }
+      take.stage = { exclude: boxes, fill: config.stage.fill || "#FFFFFF" };
+    }
     await h._cursor.park();
     await h._cursor.hide();
     if (record) await page.waitForTimeout(250);
@@ -53,8 +68,7 @@ export async function runClip({ browser, baseUrl, config, clip, mode = "dry", ta
       result.take = finished; result.takeDir = take.takeDir; result.frames = finished.frames.length; result.frameSize = finished.frameSize;
       const want = { width: Math.round(config.viewport.width * config.deviceScaleFactor), height: Math.round(config.viewport.height * config.deviceScaleFactor) };
       if (finished.frameSize && (finished.frameSize.width !== want.width || finished.frameSize.height !== want.height)) {
-        take.warn(`frames are ${finished.frameSize.width}×${finished.frameSize.height}, expected ${want.width}×${want.height}; capture is not at the configured scale`);
-        result.warnings = take.warnings;
+        throw new Error(`frames are ${finished.frameSize.width}×${finished.frameSize.height}, expected ${want.width}×${want.height}; capture is not at the configured scale`);
       }
     }
   } catch (e) {

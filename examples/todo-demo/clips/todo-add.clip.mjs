@@ -8,20 +8,35 @@ export default {
   loop: "none",
   poster: "added",
   steps: async ({ page, h }) => {
-    await h.mark("list", { focus: page.locator("ul") });   // crop focus for the project's landscape crop
-    await h.hold(600);
-    await h.type(page.getByLabel("Add a task"), "Book the studio");
+    const input = page.getByLabel("Add a task");
+    const newRow = page.locator("li", { hasText: "Book the studio" });
+    h.track("list", page.locator("ul"));
+    h.track("newRow", newRow);                                    // sampled once it exists
+    await h.mark("list", { focus: page.locator("ul") });          // crop focus for the landscape size
+    await h.mark("b1-start");
+    await h.shot("wide");
+    await h.hold(800);
+    // Explicit track: wide → focus on the input (the first push scales from the top-left) → the new row → wide.
+    await h.click(input);
+    await h.shot({ focus: [input], padding: 24 }, { ms: 600 });
+    await h.mark("b2-typing");
+    await h.speed(2, async () => {                                 // the typing plays 2× faster at export
+      await h.type(input, "Book the studio", { click: false });   // the field was clicked before the shot
+    });
     await h.click(page.getByRole("button", { name: "Add" }), { expect: () => h.visible(page.getByText("Book the studio")) });
     await h.waitForMotion();
     await h.mark("added");
-    await h.hold(1200);
-    const row = page.locator("li", { hasText: "Book the studio" });
-    await h.hover(row.getByText("Book the studio"), { holdMs: 700 });
-    await h.click(row.getByLabel("Mark done"), {
-      expect: () => h.visible(page.locator("li.done", { hasText: "Book the studio" })),
-    });
+    await h.shot({ focus: ["newRow"], padding: 24 }, { ms: 700 });  // follows the tracked row
+    await h.hold(1400);
+    await h.mark("b4-tick");
+    await h.hover(newRow.getByText("Book the studio"), { holdMs: 500 });
+    await h.click(newRow.getByLabel("Mark done"), { expect: () => h.visible(page.locator("li.done", { hasText: "Book the studio" })) });
     await h.waitForMotion();
+    await h.mark("ticked");
+    await h.hold(900);
+    await h.shot("wide", { ms: 700 });
     await h.parkCursor();
-    await h.hold(1800);
+    await h.mark("b5-end");
+    await h.hold(1600);
   },
 };

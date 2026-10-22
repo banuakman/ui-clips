@@ -1,6 +1,19 @@
 # Changelog
 
-## Unreleased (milestone 2: export and camera)
+## Unreleased (milestone 2, pass B: camera direction, stage, sizes, speed, sub-clips)
+
+- Camera: `camera.feel` presets brisk / calm (default) / lazy with the appendix D spring constants; re-aim (an action outside the shot by more than a quarter of its width starts a new shot) and cap (a box over 65% of the stage stays wide); the rest margin before the end scales with the feel and the camera snaps to wide within a pixel
+- Explicit track: `h.shot("wide" | { focus: [targets], padding }, { ms })`, eased in-out moves, 600 ms minimum hold, click-during-move warning, half-output-width floor; explicit overrides auto in its window; `h.zoomTo`/`h.zoomOut` are shorthands
+- `h.track(name, locator)`: per-frame target boxes; focus shots follow tracked targets
+- Stage: `stage.exclude` (edge regions cut, interior regions masked with `stage.fill`, masks follow moving elements) and top-aligned wide shots with fill below
+- Output sizes: `sizes` in the project config (`full`, `{ width, height, scale, focus: "auto" }`, `{ aspect, focus }`, explicit rect), one camera track per aspect, MP4/WebM/posters per size; tall focus aligns to the top
+- Speed ramp `h.speed(factor, fn)`; sub-clips (`take`, `from`, `to`) with their own poster from lossless mark screenshots
+- `export --feel`, `export --fast`; `sheet --beats`; the sheet reads the camera render when one exists
+- WebP stays a soft dependency (ffmpeg libwebp, else cwebp, else skipped with a note); record fails on wrong frame size
+- Rendering: one stage canvas pass per export, then each size's camera pass reads it straight from the decoder (a dynamic crop behind another filter segfaults ffmpeg 9)
+- Demo: todo-add has marks, tracks, an explicit track, a sped-up typing stretch, a footer stage mask and a `todo-add-tick` sub-clip
+
+## Milestone 2: export and camera
 
 - Loop modes: `return` compares the first frame with the tail (pixelmatch, threshold 0.1, 0.2% tolerance) and trims to the matching frame, warning when none matches; `crossfade` blends the last 400 ms into the head and trims so the last frame equals the first
 - Crops: `{ aspect, focus }`, `{ width, height, focus, scale }` or an explicit rect; focus boxes mapped through the camera; MP4, WebM and poster per crop

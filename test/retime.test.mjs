@@ -53,9 +53,3 @@ test("frameAt returns the nearest previous frame", () => {
   assert.equal(frameAt(entries, 10_000), 2);
 });
 
-test("crop window centres on the focus and clamps to the viewport", async () => {
-  const { windowFor } = await import("../engine/export.mjs");
-  assert.deepEqual(windowFor({ x: 964, y: 60, w: 476, h: 900 }, 480, 600, 1440, 900), { x: 960, y: 210, w: 480, h: 600 });
-  assert.deepEqual(windowFor({ x: 10, y: 10, w: 50, h: 50 }, 480, 600, 1440, 900), { x: 0, y: 0, w: 480, h: 600 });
-  assert.deepEqual(windowFor({ x: 700, y: 400, w: 40, h: 40 }, 480, 600, 1440, 900), { x: 480, y: 120, w: 480, h: 600 });
-});

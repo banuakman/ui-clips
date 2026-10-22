@@ -18,7 +18,10 @@ export const DEFAULTS = Object.freeze({
   zoom: { mode: "gentle" },              // "off" | "gentle" | "pronounced" (§10.3)
   outputs: ["mp4", "webm", "poster"],
   quality: { crf: 20, webmCrf: 30, maxWidth: 1440, jpeg: 92 },
-  crops: {},                             // named fixed-window crops: { width, height, scale, focus }
+  sizes: { full: true },                 // output sizes every clip gets (§10.2); clips add crops
+  crops: {},                             // legacy alias of sizes (project level)
+  camera: { feel: "calm" },              // "brisk" | "calm" | "lazy" (§10.3)
+  stage: null,                           // { exclude: ["nav.sidebar", { x, y, w, h }], fill: "#FFFFFF" }
   hideSelectors: [],
   cssOverrides: "",
   waitForFonts: true,
@@ -36,6 +39,9 @@ export const CLIP_DEFAULTS = Object.freeze({
   zoom: undefined,
   crops: {},
   freezeTime: null,               // ISO date or Date: fixes the page clock before navigation
+  camera: undefined,              // { feel } override
+  take: undefined,                // sub-clip: id of the clip whose take this clip is cut from (§10.2)
+  from: undefined, to: undefined, // sub-clip range: mark names, "start"/"end", or ms
   narration: null,
 });
 
@@ -99,7 +105,8 @@ export async function loadClip(file) {
   const clip = { ...CLIP_DEFAULTS, ...(mod.default || {}) };
   clip.id = clip.id || path.basename(file).replace(/\.clip\.mjs$/, "");
   clip.file = file;
-  if (typeof clip.steps !== "function") throw new ConfigError(`${file}: export default must have a steps({ page, h }) function.`);
+  clip.isSubclip = !!clip.take;
+  if (!clip.isSubclip && typeof clip.steps !== "function") throw new ConfigError(`${file}: export default must have a steps({ page, h }) function (or take/from/to for a sub-clip).`);
   return clip;
 }
 
