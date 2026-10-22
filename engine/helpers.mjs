@@ -51,7 +51,44 @@ export function createHelpers({ page, config, take, fast = false }) {
       box = await loc.boundingBox({ timeout: 5000 }).catch(() => null);
     }
     if (!box) throw new Error(`Target has no bounding box (not visible?): ${describe(target)}`);
+    // The cursor can only reach points inside the viewport. If the target's centre is outside it, bring it in
+    // (instant scroll, so a scripted h.scrollTo beforehand is the smooth way; this is the safety net).
+    const cx = box.x + box.width / 2, cy = box.y + box.height / 2;
+    if (scrollIntoView && (cx < 0 || cy < 0 || cx > vw || cy > vh)) {
+      await loc.scrollIntoViewIfNeeded({ timeout: 5000 });
+      await sleep(50);
+      box = (await loc.boundingBox({ timeout: 5000 })) || box;
+      take.warn(`${describe(target)} was outside the viewport and was scrolled into view instantly; add h.scrollTo before it for a smooth scroll`);
+    }
     return box;
+  }
+
+  const roundBox = (b) => ({ x: Math.round(b.x), y: Math.round(b.y), w: Math.round(b.width), h: Math.round(b.height) });
+
+  /** For every configured crop whose focus is a selector, record its box now if it is visible. */
+  async function measureCropFocus(at) {
+    for (const [name, crop] of Object.entries(config.crops || {})) {
+      if (typeof crop.focus !== "string" || !crop.focus.trim()) continue;
+      let loc;
+      try { loc = page.locator(crop.focus).first(); if ((await loc.count()) === 0) continue; } catch { continue; } // mark names and bad selectors: skip
+      const box = await loc.boundingBox({ timeout: 200 }).catch(() => null);
+      if (box && box.width > 0 && box.height > 0) take.focus(name, roundBox(box), at);
+    }
+  }
+
+  /** Wheel scrolling is smooth and asynchronous: wait until the scroll position stops changing. */
+  async function settleScroll(within, { timeout = 1500 } = {}) {
+    const read = () => within
+      ? (within.first ? within.first() : within).evaluate((el) => el.scrollTop + el.scrollLeft).catch(() => 0)
+      : page.evaluate(() => scrollY + scrollX);
+    const until = Date.now() + timeout;
+    let prev = await read();
+    while (Date.now() < until) {
+      await sleep(60);
+      const now = await read();
+      if (now === prev) return;
+      prev = now;
+    }
   }
 
   function logAction(kind, box, target, extra = {}) {
@@ -202,6 +239,10 @@ export function createHelpers({ page, config, take, fast = false }) {
         const centre = { x: box.x + box.width / 2, y: box.y + box.height / 2 };
         const inside = cur.x >= box.x && cur.x <= box.x + box.width && cur.y >= box.y && cur.y <= box.y + box.height;
         if (!inside) await moveToPoint(centre);
+        // Keep the wheel inside the container: no scroll chaining to the page behind it while we scroll.
+        const containEl = within ? (within.first ? within.first() : within) : null;
+        const prevOverscroll = containEl ? await containEl.evaluate((el) => { const v = el.style.overscrollBehavior; el.style.overscrollBehavior = "contain"; return v; }).catch(() => null) : null;
+        const restore = async () => { if (containEl) await containEl.evaluate((el, v) => { el.style.overscrollBehavior = v || ""; }, prevOverscroll).catch(() => {}); };
         if (fast) { await page.mouse.wheel(0, px); }
         else {
           const duration = ms ?? clamp(300 + Math.abs(px) * 0.5, 300, 1200);
@@ -213,6 +254,8 @@ export function createHelpers({ page, config, take, fast = false }) {
             if (wait > 0) await sleep(wait);
           }
         }
+        await settleScroll(within);
+        await restore();
         logAction("scroll", box, within || "page", { px });
       } catch (e) { throw new StepError(label, e); }
     },
@@ -221,11 +264,25 @@ export function createHelpers({ page, config, take, fast = false }) {
       const label = `scrollTo ${describe(target)}`;
       try {
         const loc = target.first ? target.first() : target;
-        const tb = await loc.boundingBox({ timeout: 5000 });
-        if (!tb) throw new Error("target has no bounding box");
         const cb = within ? await boxOf(within) : { x: 0, y: 0, width: vw, height: vh };
-        const delta = align === "start" ? tb.y - cb.y - 16 : (tb.y + tb.height / 2) - (cb.y + cb.height / 2);
-        if (Math.abs(delta) > 1) await h.scrollBy(Math.round(delta), { within, ms });
+        // Layout can still be growing (a section that just rendered): re-check and retry a few times.
+        for (let attempt = 0; attempt < 4; attempt++) {
+          const tb = await loc.boundingBox({ timeout: 5000 });
+          if (!tb) throw new Error("target has no bounding box");
+          let delta = align === "start" ? tb.y - cb.y - 16 : (tb.y + tb.height / 2) - (cb.y + cb.height / 2);
+          const inView = tb.y >= cb.y && tb.y + tb.height <= Math.min(cb.y + cb.height, vh);
+          if (Math.abs(delta) <= 1 || (attempt > 0 && inView)) break;
+          // Clamp to what the container can still scroll, so the excess does not chain to the page behind it.
+          if (within) {
+            const range = await (within.first ? within.first() : within).evaluate((el) => ({ up: el.scrollTop, down: el.scrollHeight - el.clientHeight - el.scrollTop })).catch(() => null);
+            if (range) delta = Math.max(-range.up, Math.min(range.down, delta));
+            if (Math.abs(delta) <= 1) break;
+          }
+          await h.scrollBy(Math.round(delta), { within, ms });
+          const after = await loc.boundingBox({ timeout: 5000 });
+          if (after && after.y >= 0 && after.y + after.height <= vh && (align !== "start" || Math.abs(after.y - cb.y - 16) <= 2 || attempt > 0)) break;
+          await sleep(150);
+        }
       } catch (e) { throw new StepError(label, e); }
     },
 
@@ -239,7 +296,10 @@ export function createHelpers({ page, config, take, fast = false }) {
     async waitForMotion({ timeout = 3000 } = {}) {
       await page.evaluate(async (timeout) => {
         const until = (p) => Promise.race([p, new Promise((r) => setTimeout(r, timeout))]);
-        await until(Promise.all(document.getAnimations().map((a) => a.finished.catch(() => {}))));
+        // The injected cursor's own click animations must not count as page motion.
+        const cursor = document.getElementById("__uiclips_cursor");
+        const page = document.getAnimations().filter((a) => !(cursor && a.effect?.target && cursor.contains(a.effect.target)));
+        await until(Promise.all(page.map((a) => a.finished.catch(() => {}))));
         await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
       }, timeout);
     },
@@ -249,7 +309,13 @@ export function createHelpers({ page, config, take, fast = false }) {
     hidden: (target, { timeout = 3000 } = {}) => poll(async () => (await target.count()) === 0 || !(await target.first().isVisible()), `expected hidden: ${describe(target)}`, timeout),
     text: (target, str, { timeout = 3000 } = {}) => poll(async () => ((await (target.first ? target.first() : target).innerText()) || "").includes(str), `expected text "${str}" in ${describe(target)}`, timeout),
 
-    mark(name) { take.mark(name); },
+    /** Name a moment. `focus` records the box of a locator on the mark (crops can point at the mark by name). */
+    async mark(name, { focus } = {}) {
+      let box = null;
+      if (focus) box = await boxOf(focus, { scrollIntoView: false }).catch(() => null);
+      take.mark(name, { box: box ? roundBox(box) : undefined });
+      await measureCropFocus(name);
+    },
 
     async trim(fn) { take.trimStart(); try { await fn(); } finally { take.trimEnd(); } },
 
@@ -269,6 +335,7 @@ export function createHelpers({ page, config, take, fast = false }) {
 
     // engine-internal
     _cursor: { hide: cursorHide, show: cursorShow, position: () => ({ ...cur }), park: () => moveToPoint(park, { ms: 0 }) },
+    _measureCropFocus: measureCropFocus,
     _nextStep: () => ++stepNo,
   };
   return h;

@@ -18,6 +18,7 @@ export const DEFAULTS = Object.freeze({
   zoom: { mode: "off" },                 // M2 flips the default to "gentle" when the camera lands
   outputs: ["mp4", "webm", "poster"],
   quality: { crf: 20, webmCrf: 30, maxWidth: 1440, jpeg: 92 },
+  crops: {},                             // named fixed-window crops: { width, height, scale, focus }
   hideSelectors: [],
   cssOverrides: "",
   waitForFonts: true,
@@ -34,6 +35,7 @@ export const CLIP_DEFAULTS = Object.freeze({
   poster: "end",
   zoom: undefined,
   crops: {},
+  freezeTime: null,               // ISO date or Date: fixes the page clock before navigation
   narration: null,
 });
 

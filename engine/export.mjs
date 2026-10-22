@@ -29,6 +29,23 @@ export async function probe(file) {
 
 const scaleFilter = (w) => `scale=${w}:-2:flags=lanczos`;
 
+/** A crop's focus: a mark name whose mark carries a box, else the last visible measurement of a selector. */
+function resolveFocus(take, cropName, focus) {
+  if (!focus) return null;
+  const mark = (take.marks || []).filter((m) => m.name === focus && m.box).pop();
+  if (mark) return { box: mark.box, at: `mark ${mark.name}` };
+  const last = (take.focusBoxes || []).filter((f) => f.crop === cropName && f.box).pop();
+  return last ? { box: last.box, at: `selector at ${last.at}` } : null;
+}
+
+/** Window of w×h CSS px centred on a box, clamped to the viewport. */
+export function windowFor(box, w, h, vw, vh) {
+  const cx = box.x + box.w / 2, cy = box.y + box.h / 2;
+  const x = Math.round(Math.min(Math.max(0, cx - w / 2), Math.max(0, vw - w)));
+  const y = Math.round(Math.min(Math.max(0, cy - h / 2), Math.max(0, vh - h)));
+  return { x, y, w, h };
+}
+
 /**
  * @returns {{clipId, files:{}, poster:{}, durationMs, checks:[], warnings:[]}}
  */
@@ -82,6 +99,43 @@ export async function exportClip({ config, clip, takeDir, outDir, log = () => {}
     result.files["mp4@2x"] = { path: f, ...(await probe(f)) };
   }
 
+  // 2b. Fixed-window crops (§10.2, minimal: no camera). Window in CSS px, centred on the focus box, clamped to the frame.
+  const crops = { ...(config.crops || {}), ...(clip.crops || {}) };
+  const dsf = take.deviceScaleFactor || config.deviceScaleFactor;
+  const vw = take.viewport.width, vh = take.viewport.height;
+  result.crops = {};
+  for (const [name, crop] of Object.entries(crops)) {
+    if (!crop.width || !crop.height) { result.warnings.push(`crop "${name}": needs width and height (fixed-window crops only in this milestone)`); continue; }
+    const focus = resolveFocus(take, name, crop.focus);
+    if (!focus) { result.warnings.push(`crop "${name}": focus "${crop.focus}" was never measured (no mark with a box and no visible element); crop skipped`); continue; }
+    const win = windowFor(focus.box, crop.width, crop.height, vw, vh);
+    const scale = crop.scale || 1;
+    const cropFilter = `crop=${Math.round(crop.width * dsf)}:${Math.round(crop.height * dsf)}:${Math.round(win.x * dsf)}:${Math.round(win.y * dsf)}`;
+    const variants = [{ suffix: "", scale }];
+    if (scale !== 1) variants.push({ suffix: "@1x", scale: 1 });
+    const entry = { window: win, focus: focus.box, focusAt: focus.at, files: {} };
+    if (focus.box.w > crop.width || focus.box.h > crop.height) entry.note = `focus is ${focus.box.w}×${focus.box.h} CSS px; the ${crop.width}×${crop.height} window does not contain it`;
+    for (const v of variants) {
+      const outW = Math.round(crop.width * v.scale), outH = Math.round(crop.height * v.scale);
+      const scaleF = v.scale === dsf ? "" : `,scale=${outW}:${outH}:flags=lanczos`;
+      if (outputs.has("mp4")) {
+        const f = path.join(outDir, `${clip.id}.${name}${v.suffix}.mp4`);
+        log(`${clip.id}: encoding crop ${name}${v.suffix} (${outW}×${outH})`);
+        await run(ffmpegBin(), ["-y", "-hide_banner", "-loglevel", "error", "-i", intermediate, "-an", "-vf", cropFilter + scaleF,
+          "-c:v", "libx264", "-preset", "slow", "-tune", "animation", "-crf", String(config.quality.crf), "-pix_fmt", "yuv420p",
+          "-profile:v", "high", "-g", String(fps * 2), "-movflags", "+faststart", f]);
+        entry.files[`mp4${v.suffix}`] = { path: f, ...(await probe(f)) };
+        result.files[`${name}${v.suffix}.mp4`] = entry.files[`mp4${v.suffix}`];
+      }
+      if (outputs.has("poster") && take.poster?.file && existsSync(path.join(takeDir, take.poster.file))) {
+        const f = path.join(outDir, `${clip.id}.${name}${v.suffix}.poster.png`);
+        await run(ffmpegBin(), ["-y", "-hide_banner", "-loglevel", "error", "-i", path.join(takeDir, take.poster.file), "-vf", cropFilter + scaleF, f]);
+        entry.files[`poster${v.suffix}`] = { path: f, bytes: statSync(f).size };
+      }
+    }
+    result.crops[name] = entry;
+  }
+
   // 3. Poster: the lossless screenshot from the take; the frame index is kept for later crops/loop work.
   if (outputs.has("poster")) {
     const src = take.poster?.file ? path.join(takeDir, take.poster.file) : null;
@@ -120,6 +174,7 @@ export async function exportClip({ config, clip, takeDir, outDir, log = () => {}
     width: W, height: result.files.mp4?.height ?? null, sourceSize: take.frameSize,
     files: Object.fromEntries(Object.entries(result.files).map(([k, v]) => [k, path.basename(v.path)])),
     poster: result.poster["@2x"] ? { "@2x": path.basename(result.poster["@2x"].path), "@1x": path.basename(result.poster["@1x"].path), at: result.poster.at } : null,
+    crops: Object.fromEntries(Object.entries(result.crops || {}).map(([k, v]) => [k, { window: v.window, focus: v.focus, files: Object.fromEntries(Object.entries(v.files).map(([fk, fv]) => [fk, path.basename(fv.path)])) }])),
     camera: take.camera, steps: take.actions, marks: take.marks, recordedAt: take.recordedAt, exportedAt: new Date().toISOString(),
     clipFileMtime: statSync(clip.file).mtimeMs,
   };

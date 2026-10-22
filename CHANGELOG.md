@@ -9,3 +9,8 @@
 - Lossless PNG poster taken during a hold
 - Export presets: H.264 MP4 (fast-start), VP9 WebM, poster PNG at 1× and 2×, `out/manifest.json`
 - Example project `examples/todo-demo` against a local static page
+- Fixed-window crops (M2 item pulled forward): project- or clip-level `crops: { name: { width, height, scale, focus } }`, focus from a mark's box (`h.mark(name, { focus })`) or a measured selector; exported as `<id>.<crop>.mp4` plus `@1x`, with matching posters and manifest entries
+- `inspect` reports links and buttons whose text sits in nested elements
+- `waitForMotion` ignores the injected cursor's own click animations
+- Clip-level `freezeTime` fixes the page clock before navigation
+- Scrolling: `scrollBy` waits for the scroll to settle, `scrollTo` clamps to the container's range, retries while layout is still growing, and contains overscroll so nothing chains to the page behind; a click target outside the viewport is scrolled into view with a warning

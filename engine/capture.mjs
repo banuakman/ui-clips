@@ -21,10 +21,12 @@ export class DryTake {
   start() { this.t0 = Date.now(); }
   t() { return this.t0 == null ? 0 : Date.now() - this.t0; }
   log(entry) { this.actions.push({ t: this.t(), ...entry }); }
-  mark(name) {
-    this.marks.push({ name, t: this.t() });
+  mark(name, { box } = {}) {
+    this.marks.push({ name, t: this.t(), ...(box ? { box } : {}) });
     if (name === this.poster.mode && !this.poster.taken) this.poster.pending = true;
   }
+  /** Record where a crop's focus element is at a given moment (last visible measurement wins at export). */
+  focus(crop, box, at) { (this.focusBoxes ||= []).push({ crop, at, t: this.t(), box }); }
   trimStart() { this._trimOpen = this.t(); }
   trimEnd() { if (this._trimOpen != null) { this.trims.push([this._trimOpen, this.t()]); this._trimOpen = null; } }
   cameraKey(entry) { this.camera.push({ t: this.t(), ...entry }); }
@@ -126,6 +128,7 @@ export class RecordTake extends DryTake {
       marks: this.marks,
       trims: this.trims,
       camera: this.camera,
+      focusBoxes: this.focusBoxes || [],
       poster: this.poster,
       warnings: this.warnings,
     };

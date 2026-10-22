@@ -18,13 +18,16 @@ export async function runClip({ browser, baseUrl, config, clip, mode = "dry", ta
   const result = { ok: false, clipId: clip.id, mode, durationMs: 0, warnings: [] };
   let take;
   try {
+    // A clip-level freezeTime applies before navigation so relative dates render against the fixed clock.
+    if (clip.freezeTime) await page.clock.setFixedTime(new Date(clip.freezeTime));
     log(`${clip.id}: opening ${clip.start}`);
     const nav = await gotoStart(page, config, baseUrl, clip.start);
     result.url = nav.url; result.status = nav.status;
     take = record
       ? new RecordTake({ clip, config, page, takeDir: takeDirFor(config, clip, takeId) })
       : new DryTake({ clip, config });
-    const h = createHelpers({ page, config, take, fast: !record });
+    const runConfig = { ...config, crops: { ...(config.crops || {}), ...(clip.crops || {}) } };
+    const h = createHelpers({ page, config: runConfig, take, fast: !record });
     await h._cursor.park();
     await h._cursor.hide();
     if (record) await page.waitForTimeout(250);
@@ -32,6 +35,7 @@ export async function runClip({ browser, baseUrl, config, clip, mode = "dry", ta
     await take.start();
     log(`${clip.id}: ${record ? "recording" : "rehearsing"} steps`);
     await clip.steps({ page, h });
+    await h._measureCropFocus("end");
     // Target length: pad the final hold, or warn when the steps already overshoot.
     if (typeof clip.length === "number") {
       const elapsed = take.t();

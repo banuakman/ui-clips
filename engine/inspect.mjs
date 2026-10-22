@@ -39,7 +39,13 @@ export async function inspectPage(page) {
       const own = [...el.childNodes].filter((n) => n.nodeType === 3).map((n) => n.textContent).join(" ").replace(/\s+/g, " ").trim();
       const isInput = ["INPUT", "TEXTAREA", "SELECT"].includes(el.tagName);
       const label = el.getAttribute("aria-label") || (isInput ? (el.placeholder || (el.labels && el.labels[0]?.innerText) || "") : "");
-      const text = own || (isInput ? "" : "");
+      // Links and buttons often wrap their text in spans; fall back to the element's own innerText.
+      let text = own;
+      let via = "text";
+      if (!text && !label && (el.tagName === "A" || el.tagName === "BUTTON" || el.getAttribute("role") === "button")) {
+        const inner = (el.innerText || "").replace(/\s+/g, " ").trim();
+        if (inner && inner.length <= 80) { text = inner; via = "innerText"; }
+      }
       if (!text && !label) continue;
       if (!visible(el)) continue;
       const r = el.getBoundingClientRect();
@@ -48,6 +54,7 @@ export async function inspectPage(page) {
         text: text || null, label: label || null, tag: el.tagName.toLowerCase(), role, path: pathOf(el),
         box: { x: Math.round(r.x), y: Math.round(r.y), w: Math.round(r.width), h: Math.round(r.height) },
         href: el.tagName === "A" ? el.getAttribute("href") : undefined,
+        via,
         clickable: !!(el.closest("a,button,[role=button],[onclick],input,select,textarea,summary,label") || getComputedStyle(el).cursor === "pointer"),
         inputType: isInput ? (el.type || el.tagName.toLowerCase()) : undefined,
       };
@@ -64,7 +71,8 @@ export async function inspectPage(page) {
     const q = (s) => JSON.stringify(s);
     const locators = [];
     if (it.text) {
-      locators.push(`page.getByText(${q(it.text)}, { exact: true })${it.count > 1 ? "  // " + it.count + " matches; add .first()/.nth(n) or scope it" : ""}`);
+      if (it.via === "innerText") locators.push(`page.locator(${q(it.tag)}, { hasText: ${q(it.text)} })${it.count > 1 ? "  // " + it.count + " matches; add .first()/.nth(n) or scope it" : ""}`);
+      else locators.push(`page.getByText(${q(it.text)}, { exact: true })${it.count > 1 ? "  // " + it.count + " matches; add .first()/.nth(n) or scope it" : ""}`);
       locators.push(`page.locator(${q(it.tag + ":has-text(" + q(it.text) + ")")})`);
     }
     if (it.label) locators.push(`page.getByLabel(${q(it.label)})`);
