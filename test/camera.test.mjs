@@ -159,3 +159,61 @@ test("a first shot logged within the first frame is the opening framing from t =
   assert.deepEqual(track.opening, { x: 0, y: 0, w: 800, h: 1000 });
   assert.ok(atRest(track.frames[0], track.opening), "frame 0 is already the cover framing");
 });
+
+import { edgeBox, plannedWindow } from "../engine/camera.mjs";
+
+test("focus: the window follows the anchor, extras widen only, and a departing target never re-solves", () => {
+  const st = { x: 0, y: 0, w: 1190, h: 1000, masks: [], cuts: [] };
+  const g = frameGeometry(st, { aspect: 0.8, outWidthPx: 960, deviceScaleFactor: 2 });
+  // anchor scrolls up 200 px between 0 and 2 s; the extra is visible until 1 s then leaves
+  const tracks = {
+    head: [[0, 740, 400, 400, 36], [2000, 740, 200, 400, 36]],
+    card: [[0, 740, 460, 400, 200], [1000, 740, 460, 400, 200], [1001, 740, -300, 400, 200]],
+  };
+  const ex = buildExplicit([{ t: 0, kind: "focus", anchor: { track: "head" }, extras: [{ track: "card" }], padding: 24, ms: 0 }], { tracks, stage: st, geo: g, actions: [] });
+  const w0 = ex.windowAt(0, () => g.wide), w500 = ex.windowAt(500, () => g.wide), w1500 = ex.windowAt(1500, () => g.wide), w2000 = ex.windowAt(2000, () => g.wide);
+  assert.ok(w0.y + w0.h >= 660 - 1e-6, "the visible extra is inside the opening frame");
+  assert.ok(Math.abs((w500.y - w0.y) - (-50)) < 1e-6, "follows the anchor: 50 px up after 0.5 s");
+  assert.ok(Math.abs(w1500.w - w0.w) < 1e-6, "the frame does not shrink when the extra leaves");
+  assert.ok(Math.abs((w2000.y - w0.y) - (-200)) < 1e-6, "still following the anchor at 2 s");
+  // anchor leaves the stage: hold
+  const gone = { head: [[0, 740, 500, 400, 36], [1000, 740, -100, 400, 36]] };
+  const ex2 = buildExplicit([{ t: 0, kind: "focus", anchor: { track: "head" }, padding: 24, ms: 0 }], { tracks: gone, stage: st, geo: g, actions: [] });
+  const a = ex2.windowAt(900, () => g.wide), b = ex2.windowAt(1500, () => g.wide);
+  assert.deepEqual(b, a, "window held while the anchor is off-screen");
+});
+
+test("an anchor below the fold starts the window at the bottom edge and the window follows it in", () => {
+  const st = { x: 0, y: 0, w: 1190, h: 1000, masks: [], cuts: [] };
+  const g = frameGeometry(st, { aspect: 0.8, outWidthPx: 960, deviceScaleFactor: 2 });
+  assert.deepEqual(edgeBox({ x: 700, y: 1227, w: 400, h: 28 }, st), { x: 700, y: 998, w: 400, h: 2 });
+  const tracks = { heading: [[0, 740, 1227, 400, 28], [1000, 740, 200, 400, 28]] };
+  const ex = buildExplicit([{ t: 0, kind: "focus", anchor: { track: "heading" }, padding: 24, ms: 0 }], { tracks, stage: st, geo: g, actions: [] });
+  const w0 = ex.windowAt(0, () => g.wide), w1 = ex.windowAt(1000, () => g.wide);
+  assert.ok(w0.y + w0.h <= 1000 + 1e-6 && w0.y + w0.h >= 999, "hugs the bottom edge");
+  assert.equal(w1.y, 200 - 24, "followed the heading up: a short anchor sits at the top of the frame");
+});
+
+test("plannedWindow reports absent and off-screen targets and frames that cannot fit", () => {
+  const st = { x: 0, y: 0, w: 1190, h: 1000, masks: [], cuts: [] };
+  const g = frameGeometry(st, { aspect: 0.8, outWidthPx: 960, deviceScaleFactor: 2 });
+  const a = plannedWindow({ kind: "focus", anchor: { track: "x" }, extras: [{ track: "y" }], padding: 24 }, { x: { x: 100, y: 1200, w: 50, h: 20 }, y: null }, { geo: g, stage: st, opening: null });
+  assert.ok(a.problems.some((p) => /anchor x is off-screen/.test(p)) && a.problems.some((p) => /extra y is absent/.test(p)));
+  assert.ok(a.window, "still plans a window at the edge");
+  const b = plannedWindow({ kind: "focus", anchor: { box: { x: 0, y: 0, w: 1190, h: 1000 } }, padding: 24 }, {}, { geo: g, stage: st, opening: null });
+  assert.ok(b.problems.some((p) => /cannot|allows/.test(p)));
+});
+
+import { focusFrame } from "../engine/camera.mjs";
+
+test("focusFrame: a short anchor sits at the top of the frame, a tall one is centred; extras widen only", () => {
+  const st = { x: 0, y: 0, w: 1190, h: 1000, masks: [], cuts: [] };
+  const g = frameGeometry(st, { aspect: 0.8, outWidthPx: 960, deviceScaleFactor: 2 });
+  const heading = focusFrame({ x: 739, y: 582, w: 427, h: 28 }, [], { padding: 24 }, g, st);
+  assert.equal(heading.y, 400, "heading placed at the top, then the frame is clamped to the stage bottom");
+  assert.ok(heading.y + heading.h > 946 && heading.y < 582, "the heading and Apply Resolution, 364 px below it, are both inside the 600 px frame");
+  const card = focusFrame({ x: 739, y: 321, w: 427, h: 235 }, [], { padding: 24 }, g, st);
+  assert.ok(Math.abs((card.y + card.h / 2) - (321 + 235 / 2)) < 1e-6, "a tall anchor is centred");
+  const grown = focusFrame({ x: 739, y: 582, w: 427, h: 28 }, [], { padding: 24, minSize: { w: 700, h: 875 } }, g, st);
+  assert.equal(grown.w, 700, "never shrinks below the size reached so far");
+});

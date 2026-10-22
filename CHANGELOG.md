@@ -1,6 +1,14 @@
 # Changelog
 
-## Unreleased (milestone 2, pass C: wide modes, settled posters, enforced rest)
+## Unreleased (milestone 2, pass D: anchor rule, rehearsal report, framing sheet)
+
+- Focus shots are `{ anchor, extras, padding }`: the window follows the anchor; extras widen it only while visible; a target leaving the viewport never re-solves or re-centres the window; an anchor off-stage when the shot starts hugs the edge it will enter from and the window follows it in. Legacy `{ focus: [targets] }` maps to anchor + extras
+- Focus frames are placed by their anchor: a short anchor such as a heading sits at the top of the frame so the section below it is what the viewer sees, a tall anchor is centred (`align: "top" | "center"` overrides); the size never shrinks within a shot
+- `dry-run` now reports the camera plan per beat: absent or off-screen targets, windows that cannot fit the aspect without fill, clicks outside the planned frame, and a closing framing that does not match the opening; it takes a 1× screenshot at every mark
+- `sheet --framing [--size card]`: from the rehearsal, each beat's stage frame with the planned camera window drawn on it beside the crop that window gives, so framing is judged before any recording
+- Spec §6.2, §8, §10.3 and appendix D updated to match (2026-10-22)
+
+## Milestone 2, pass C: wide modes, settled posters, enforced rest
 
 - Wide shots: `contain` (the opening framing; opening shot only) and `cover` (frame filled at full stage height, sides cropped, anchored left/right/center or a target; default for any later wide); `h.shot("opening")` returns to the first framing
 - Posters and contact-sheet cells render through the camera per output size, using the window a move settles on; `sheet --size <name>`

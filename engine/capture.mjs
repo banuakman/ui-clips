@@ -5,9 +5,12 @@ import path from "node:path";
 
 /** A dry take logs actions and marks but captures nothing. */
 export class DryTake {
-  constructor({ clip, config }) {
+  constructor({ clip, config, page = null, rehearsalDir = null }) {
     this.clip = clip;
     this.config = config;
+    this.page = page;
+    this.rehearsalDir = rehearsalDir;
+    this.beatShots = {};      // mark name → 1× PNG taken while rehearsing (framing sheet)
     this.t0 = null;
     this.actions = [];
     this.marks = [];
@@ -27,12 +30,23 @@ export class DryTake {
   start() { this.t0 = Date.now(); }
   t() { return this.t0 == null ? 0 : Date.now() - this.t0; }
   log(entry) { this.actions.push({ t: this.t(), ...entry }); }
-  mark(name, { box } = {}) {
-    this.marks.push({ name, t: this.t(), ...(box ? { box } : {}) });
+  mark(name, { box, boxesNow } = {}) {
+    this.marks.push({ name, t: this.t(), ...(box ? { box } : {}), ...(boxesNow ? { boxesNow } : {}), seq: this.markSeq() });
     if (name === this.poster.mode && !this.poster.taken) this.poster.pending = true;
     this.pendingMarks.push(name);
   }
-  shot(entry) { this.shots.push({ t: this.t(), ...entry }); }
+  /** Rehearsal only: a 1× screenshot of the viewport at a beat, for the framing sheet. */
+  async beatShot(name) {
+    if (!this.rehearsalDir || !this.page || this.recording) return;
+    const file = `beat-${name.replace(/[^\w.-]+/g, "_")}.png`;
+    const png = await this.page.screenshot({ type: "png", animations: "allow", caret: "hide", scale: "css" });
+    mkdirSync(this.rehearsalDir, { recursive: true });
+    writeFileSync(path.join(this.rehearsalDir, file), png);
+    this.beatShots[name] = file;
+  }
+  shot(entry) { this.shots.push({ t: this.t(), ...entry, seq: this._seq = (this._seq || 0) + 1 }); }
+  holdEvent(ms) { (this.holds ||= []).push({ t: this.t(), ms, seq: this._seq = (this._seq || 0) + 1 }); }
+  markSeq() { return (this._seq = (this._seq || 0) + 1); }
   speedStart() { return this.t(); }
   speedEnd(from, factor) { this.speeds.push({ from, to: this.t(), factor }); }
   trackSample(name, box) { (this.tracks[name] ||= []).push([this.t(), box.x, box.y, box.w, box.h]); }

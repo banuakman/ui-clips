@@ -17,7 +17,9 @@ const USAGE = `ui-clips <command> [args] [--project <dir>] [--json]
 Options: --project <dir>  --json  --changed
          export: --zoom off|gentle|pronounced  --feel brisk|calm|lazy  (re-render the camera from the same take)
                  --fast (faster VP9, no GIF, camera at export width)
-         sheet:  --beats (one frame per mark)  --size <name> (from that output size)      doctor: --no-url`;
+         sheet:  --beats (one frame per mark)  --size <name> (from that output size)
+                 --framing (from the dry run: each beat's stage frame with the planned camera window beside the card crop)
+         doctor: --no-url`;
 
 const { values: opts, positionals } = parseArgs({
   allowPositionals: true,
@@ -30,6 +32,7 @@ const { values: opts, positionals } = parseArgs({
     fast: { type: "boolean", default: false },
     beats: { type: "boolean", default: false },
     size: { type: "string" },
+    framing: { type: "boolean", default: false },
     "no-url": { type: "boolean", default: false },
     help: { type: "boolean", short: "h", default: false },
   },
@@ -42,6 +45,7 @@ const fail = (msg, code = 1) => { if (opts.json) process.stdout.write(JSON.strin
 if (!command || opts.help) { console.log(USAGE); process.exit(command ? 0 : 1); }
 
 const { resolveProjectDir, loadConfig, loadClips, ConfigError } = await import("./config.mjs");
+const { formatRehearsal } = await import("./rehearsal.mjs");
 
 async function project() {
   const dir = resolveProjectDir(opts.project);
@@ -72,9 +76,9 @@ function changedOnly(config, clips) {
   });
 }
 
-const fmtResult = (r) => r.skipped ? `· ${r.clipId}: ${r.skipped}` : r.ok
-  ? `✓ ${r.clipId}: ${r.mode === "record" ? `${r.frames} frames (${r.frameSize?.width}×${r.frameSize?.height})` : `${r.actions} actions`} in ${(r.durationMs / 1000).toFixed(2)} s${r.warnings?.length ? "\n  ⚠ " + r.warnings.join("\n  ⚠ ") : ""}`
-  : `✗ ${r.clipId}: ${r.error.kind}${r.error.step ? ` at step "${r.error.step}"` : ""}: ${r.error.message}`;
+const fmtRehearsal = (r) => (r.rehearsal ? "\n" + formatRehearsal(r.rehearsal) : "");
+const fmtResult = (r) => r.skipped ? `· ${r.clipId}: ${r.skipped}` : r.error ? `✗ ${r.clipId}: ${r.error.kind}${r.error.step ? ` at step "${r.error.step}"` : ""}: ${r.error.message}` : (r.ok ? "✓" : "⚠") + ` ${r.clipId}: ${r.mode === "record" ? `${r.frames} frames (${r.frameSize?.width}×${r.frameSize?.height})` : `${r.actions} actions`} in ${(r.durationMs / 1000).toFixed(2)} s${r.warnings?.length ? "\n  ⚠ " + r.warnings.join("\n  ⚠ ") : ""}`
+  + fmtRehearsal(r);
 
 try {
   switch (command) {
@@ -148,9 +152,14 @@ try {
     case "sheet": {
       if (!arg) fail("sheet needs a clip id");
       const config = await project();
-      const { contactSheet } = await import("./sheet.mjs");
+      const { contactSheet, framingSheet } = await import("./sheet.mjs");
       const { takeDirFor } = await import("./run.mjs");
       const [clip] = await loadClips(config, arg);
+      if (opts.framing) {
+        const r = await framingSheet({ config, clip, takeDir: takeDirFor(config, clip), outDir: config.outDir, size: opts.size || "card" });
+        emit({ ok: true, ...r }, `✓ ${r.path}\n` + r.legend.rows.map((b) => `  ${String(b.row).padStart(2)}  ${b.beat.padEnd(14)} ${String(b.t).padStart(6)} ms  ${b.window ? `${b.size} window ${b.window.w}×${b.window.h} at ${b.window.x},${b.window.y}` : "no window"}${b.problems.length ? "  ✗ " + b.problems.join("; ") : ""}`).join("\n"));
+        break;
+      }
       const r = await contactSheet({ config, clip, takeDir: takeDirFor(config, clip), outDir: config.outDir, beats: opts.beats, size: opts.size || "full" });
       emit({ ok: true, ...r }, `✓ ${r.path}\n` + r.legend.frames.map((f) => `  ${String(f.cell).padStart(2)}  ${String(f.t).padStart(6)} ms  ${f.label}`).join("\n"));
       break;

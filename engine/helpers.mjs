@@ -43,6 +43,15 @@ export function createHelpers({ page, config, take, fast = false }) {
   async function cursorHide() { await page.evaluate(() => window.__uiclips?.hide()).catch(() => {}); }
   async function cursorShow() { await page.evaluate(() => window.__uiclips?.show()).catch(() => {}); }
 
+  /** A target's box right now, without waiting: null when it does not exist yet. */
+  async function quickBox(target) {
+    if (!target) return null;
+    if (typeof target.x === "number") return { x: target.x, y: target.y, width: 0, height: 0 };
+    const loc = target.first ? target.first() : target;
+    try { if ((await loc.count()) === 0) return null; } catch { return null; }
+    return loc.boundingBox({ timeout: 300 }).catch(() => null);
+  }
+
   async function boxOf(target, { scrollIntoView = true } = {}) {
     if (target && typeof target.x === "number") return { x: target.x, y: target.y, width: 0, height: 0 };
     const loc = target.first ? target.first() : target;
@@ -299,6 +308,7 @@ export function createHelpers({ page, config, take, fast = false }) {
 
     /** Hold the frame. Pending poster and mark screenshots are taken at the start of the hold, without stretching it. */
     async hold(ms) {
+      take.holdEvent?.(ms);
       let spent = 0;
       if (take.posterDue()) spent += await take.takePoster("hold");
       if (take.pendingMarks?.length) spent += await take.takeMarkShots();
@@ -325,8 +335,14 @@ export function createHelpers({ page, config, take, fast = false }) {
     async mark(name, { focus } = {}) {
       let box = null;
       if (focus) box = await boxOf(focus, { scrollIntoView: false }).catch(() => null);
-      take.mark(name, { box: box ? roundBox(box) : undefined });
+      let boxesNow;
+      if (fast) {   // rehearsal: where every tracked target is at this beat, so the planned window can follow its anchor
+        boxesNow = {};
+        for (const [n, loc] of Object.entries(trackTargets)) { const b = await quickBox(loc); boxesNow[n] = b ? roundBox(b) : null; }
+      }
+      take.mark(name, { box: box ? roundBox(box) : undefined, boxesNow });
       await measureCropFocus(name);
+      if (fast && take.beatShot) await take.beatShot(name);
     },
 
     async trim(fn) { take.trimStart(); try { await fn(); } finally { take.trimEnd(); } },
@@ -336,21 +352,38 @@ export function createHelpers({ page, config, take, fast = false }) {
      * or track names (per-frame boxes from h.track). The move eases in-out over `ms` and is rendered at export.
      */
     async shot(spec, { ms = 600, mode, anchor } = {}) {
-      if (spec === "opening") { take.shot({ kind: "opening", ms }); return; }
+      const t = take.t();                                        // the shot is keyed to the moment it is called, not when measuring ends
+      if (spec === "opening") { take.shot({ t, kind: "opening", ms }); return; }
       if (spec === "wide") {
-        const entry = { kind: "wide", ms, mode };
+        const entry = { t, kind: "wide", ms, mode };
         if (typeof anchor === "string") entry.anchor = anchor;
         else if (anchor && anchor.first) { const b = await boxOf(anchor, { scrollIntoView: false }).catch(() => null); if (b) entry.anchorBox = roundBox(b); }
         if (typeof anchor === "string" && trackTargets[anchor]) { entry.anchorTrack = anchor; delete entry.anchor; }
         take.shot(entry);
         return;
       }
-      const targets = [];
-      for (const tg of spec.focus || []) {
-        if (typeof tg === "string") targets.push({ track: tg });
-        else { const b = await boxOf(tg, { scrollIntoView: false }).catch(() => null); if (b) targets.push({ box: roundBox(b), locator: describe(tg) }); else take.warn(`shot: target ${describe(tg)} has no box at ${take.t()} ms`); }
-      }
-      take.shot({ kind: "focus", targets, padding: spec.padding ?? 24, ms });
+      // focus(anchor, { extras, padding }): the window follows the anchor; extras widen it only while visible.
+      // Legacy { focus: [targets] } maps to anchor = first, extras = rest.
+      const list = spec.focus ? [spec.anchor, ...spec.focus].filter(Boolean) : [spec.anchor, ...(spec.extras || [])].filter(Boolean);
+      if (!list.length) throw new StepError("shot", new Error("a focus shot needs an anchor"));
+      const boxesNow = {};
+      const ref = async (tg) => {
+        if (typeof tg === "string") {
+          const loc = trackTargets[tg];
+          const b = loc ? await quickBox(loc) : null;
+          boxesNow[tg] = b ? roundBox(b) : null;
+          if (!loc) take.warn(`shot: "${tg}" is not a tracked target`);
+          return { track: tg };
+        }
+        const b = await quickBox(tg);
+        const name = describe(tg);
+        boxesNow[name] = b ? roundBox(b) : null;
+        return { box: b ? roundBox(b) : null, locator: name };
+      };
+      const anchorRef = await ref(list[0]);
+      const extras = [];
+      for (const tg of list.slice(1)) extras.push(await ref(tg));
+      take.shot({ t, kind: "focus", anchor: anchorRef, extras, padding: spec.padding ?? 24, align: spec.align || "auto", ms, boxesNow });
     },
     /** Register a target whose on-screen box is sampled every frame of the take, so a focus shot can follow it. */
     track(name, locator) {
@@ -360,7 +393,7 @@ export function createHelpers({ page, config, take, fast = false }) {
     /** Run a step; at export that stretch of the take plays `factor`× faster. */
     async speed(factor, fn) { const from = take.speedStart(); try { await fn(); } finally { take.speedEnd(from, factor); } },
     // shorthands
-    async zoomTo(target, { ms = 600, padding = 24 } = {}) { await h.shot({ focus: [target], padding }, { ms }); },
+    async zoomTo(target, { ms = 600, padding = 24 } = {}) { await h.shot({ anchor: target, padding }, { ms }); },
     async zoomOut({ ms = 600 } = {}) { await h.shot("wide", { ms }); },
 
     async parkCursor({ ms = 500 } = {}) {

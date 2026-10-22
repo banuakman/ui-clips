@@ -176,6 +176,7 @@ export function buildExplicit(shotsIn, { tracks = {}, stage, geo, actions = [] }
   if (shots.length && shots[0].t <= 40) { shots[0].t = 0; shots[0].ms = 0; }   // the opening is a framing, not a move
   // Only the opening shot may be wide("contain"); a later "wide" defaults to cover; "opening" returns to the first framing.
   shots.forEach((s, i) => {
+    if (s.kind === "focus" && !s.anchor && s.targets?.length) { s.anchor = s.targets[0]; s.extras = s.targets.slice(1); }   // legacy focus([targets])
     if (s.kind !== "wide") return;
     if (i === 0) { s.mode = s.mode || "contain"; return; }
     if (s.mode === "contain") { warnings.push(`camera: shot ${i + 1} asks for wide("contain") after the opening; treated as a return to the opening framing`); s.kind = "opening"; delete s.mode; delete s.anchor; return; }
@@ -187,24 +188,33 @@ export function buildExplicit(shotsIn, { tracks = {}, stage, geo, actions = [] }
     if (shots[i].t < minT) { warnings.push(`camera: shot ${i + 1} at ${Math.round(shots[i].t)} ms moved to ${Math.round(minT)} ms so the previous shot holds ${CAMERA.explicitMinHoldMs} ms`); shots[i].t = minT; }
   }
   for (const s of shots) for (const a of actions) if (a.kind === "click" && a.t > s.t && a.t < s.t + s.ms) { warnings.push(`camera: a click at ${a.t} ms lands during the move starting at ${Math.round(s.t)} ms`); break; }
-  const trackBox = (name, T) => trackBoxAt(tracks[name], T);
+  const rawBox = (tg, T) => (tg.track ? trackBoxAt(tracks[tg.track], T) : tg.box) || null;
   let openingWindow = null;
   const targetWindow = (s, T) => {
     if (s.kind === "opening") return openingWindow ? { ...openingWindow } : { ...geo.wide };
     if (s.kind === "wide") {
-      const anchorBox = s.anchorTrack ? trackBox(s.anchorTrack, T) : s.anchorBox || null;
+      const anchorBox = s.anchorTrack ? trackBoxAt(tracks[s.anchorTrack], T) : s.anchorBox || null;
       return wideWindow(geo, stage, { mode: s.mode, anchor: s.anchor, anchorBox });
     }
-    // Targets only count where they can be seen: boxes are clipped to the stage and skipped while fully outside it
-    // (a drawer section below the fold joins the frame as it scrolls in).
-    let u = null, missing = [];
-    for (const tg of s.targets || []) {
-      const b = clipToStage(tg.track ? trackBox(tg.track, T) : tg.box, stage);
-      if (b) u = union(u, b); else missing.push(tg.track || "?");
-    }
-    if (!u) return { ...geo.wide };
-    const padded = padBox(u, stage, { absolute: s.padding });
-    return frameAround(padded, geo, stage);
+    return focusWindow(s, T);
+  };
+  /**
+   * Focus (§10.3): the window follows the anchor; extras widen it only while visible; a target leaving the viewport
+   * never re-solves or re-centres the window. Per-shot state: the solved base window, the anchor position it was
+   * solved for, and the last window shown.
+   */
+  const focusWindow = (s, T) => {
+    const st = (s._st ||= { size: null, last: null });
+    const anchorRaw = s.anchor ? rawBox(s.anchor, T) : null;
+    const anchorVis = clipToStage(anchorRaw, stage);
+    const extrasVis = (s.extras || []).map((tg) => clipToStage(rawBox(tg, T), stage)).filter(Boolean);
+    // An anchor that exists but lies outside the stage hugs the edge it will enter from; the window waits there.
+    const a = anchorVis || (anchorRaw && !st.size ? edgeBox(anchorRaw, stage) : null);
+    if (!a) return st.last || { ...geo.wide };                   // anchor off-screen: hold, never re-solve
+    const win = focusFrame(a, extrasVis, { padding: s.padding, align: s.align, minSize: st.size }, geo, stage);
+    st.size = { w: win.w, h: win.h };                            // widen only
+    st.last = win;
+    return { ...win };
   };
   if (shots.length) openingWindow = targetWindow(shots[0], shots[0].t);
   const windowAt = (T, stateAtStart) => {
@@ -220,6 +230,68 @@ export function buildExplicit(shotsIn, { tracks = {}, stage, geo, actions = [] }
     return { x: from.x + (target.x - from.x) * e, y: from.y + (target.y - from.y) * e, w: from.w + (target.w - from.w) * e, h: from.h + (target.h - from.h) * e };
   };
   return { windowAt, shots, warnings, firstT: shots.length ? shots[0].t : Infinity, opening: openingWindow };
+}
+
+/**
+ * The frame of a focus shot (§10.3): sized to the anchor plus the visible extras with padding, never smaller than
+ * `minSize` (widen only), placed by the anchor: a short anchor such as a heading sits at the top of the frame so the
+ * content below it is what the viewer sees; a tall anchor is centred. `align` forces "top" or "center".
+ */
+export function focusFrame(anchor, extras, { padding = CAMERA.explicitPadding, align = "auto", minSize = null }, geo, stage) {
+  const padded = padBox(extras.reduce(union, anchor), stage, { absolute: padding });
+  const sized = frameAround(padded, geo, stage);
+  let w = sized.w, h = sized.h;
+  if (minSize && minSize.w > w + 0.5) { w = minSize.w; h = minSize.h; }
+  const mode = align === "auto" ? (anchor.h < h * 0.25 ? "top" : "center") : align;
+  const cx = anchor.x + anchor.w / 2;
+  let x = clamp(cx - w / 2, 0, Math.max(0, stage.w - w));
+  // keep visible extras inside horizontally when they fit
+  const ux = padded.x, ux1 = padded.x + padded.w;
+  if (ux1 - ux <= w) x = clamp(Math.min(x, ux), Math.max(0, ux1 - w), Math.max(0, stage.w - w)) ;
+  let y = mode === "top" ? anchor.y - padding : anchor.y + anchor.h / 2 - h / 2;
+  if (mode === "top" && extras.length) y = Math.min(y, padded.y);
+  y = h <= stage.h ? clamp(y, 0, stage.h - h) : 0;
+  return { x, y, w, h };
+}
+
+/** A box outside the stage, moved to hug the edge it lies beyond (same size, clipped to the stage). */
+export function edgeBox(box, stage) {
+  const b = { ...box };
+  if (b.y >= stage.h) b.y = stage.h - Math.min(b.h, 2);
+  if (b.y + b.h <= 0) b.y = 0 - b.h + Math.min(b.h, 2);
+  if (b.x >= stage.w) b.x = stage.w - Math.min(b.w, 2);
+  if (b.x + b.w <= 0) b.x = 0 - b.w + Math.min(b.w, 2);
+  return clipToStage(b, stage);
+}
+
+/**
+ * The planned window of a shot from boxes measured at one moment (rehearsal): wide/opening as usual, focus from the
+ * anchor (edge-hugging when off-stage) plus visible extras. Returns { window, problems:[...] }.
+ */
+export function plannedWindow(shot, boxes, { geo, stage, opening }) {
+  const problems = [];
+  if (shot.kind === "opening") return { window: opening ? { ...opening } : { ...geo.wide }, problems };
+  if (shot.kind === "wide") return { window: wideWindow(geo, stage, { mode: shot.mode || "contain", anchor: shot.anchor, anchorBox: boxes[shot.anchorTrack] || shot.anchorBox }), problems };
+  const name = (tg) => tg.track || tg.locator || "target";
+  const raw = (tg) => (tg.track ? boxes[tg.track] : tg.box) || null;
+  const anchorRaw = shot.anchor ? raw(shot.anchor) : null;
+  if (!anchorRaw) { problems.push(`anchor ${shot.anchor ? name(shot.anchor) : "(none)"} is absent`); return { window: null, problems }; }
+  let a = clipToStage(anchorRaw, stage);
+  if (!a) { problems.push(`anchor ${name(shot.anchor)} is off-screen (y ${Math.round(anchorRaw.y)})`); a = edgeBox(anchorRaw, stage); }
+  let u = a;
+  for (const tg of shot.extras || []) {
+    const r = raw(tg);
+    if (!r) { problems.push(`extra ${name(tg)} is absent`); continue; }
+    const v = clipToStage(r, stage);
+    if (!v) { problems.push(`extra ${name(tg)} is off-screen`); continue; }
+    u = union(u, v);
+  }
+  const extras = [];
+  for (const tg of shot.extras || []) { const v = clipToStage(raw(tg), stage); if (v) extras.push(v); }
+  const padded = padBox(u, stage, { absolute: shot.padding ?? CAMERA.explicitPadding });
+  const need = Math.max(padded.w, padded.h * geo.aspect);
+  if (need > geo.wide.w + 0.5 || need / geo.aspect > stage.h + 0.5) problems.push(`anchor and extras need a ${Math.round(need)}×${Math.round(need / geo.aspect)} frame; the stage allows ${Math.round(geo.wide.w)}×${Math.round(stage.h)} at this aspect, so fill would show`);
+  return { window: focusFrame(a, extras, { padding: shot.padding, align: shot.align }, geo, stage), problems };
 }
 
 /** A tracked box at time T, interpolated between the samples around T so a follow is a ramp, not a staircase. */

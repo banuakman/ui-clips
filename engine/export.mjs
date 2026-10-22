@@ -149,7 +149,8 @@ export async function exportClip({ config, clip, takeDir, outDir, log = () => {}
   const O = (t) => tm.toOutput(t);
   const marks = (take.marks || []).map((m) => ({ ...m, t: O(m.t) }));
   const actions = (take.actions || []).map((a) => ({ ...a, t: O(a.t), ...toStage(a, stage) }));
-  const explicitShots = (take.shots || []).map((s) => ({ ...s, t: O(s.t), targets: (s.targets || []).map((tg) => (tg.box ? { ...tg, box: toStage(tg.box, stage) } : tg)), anchorBox: s.anchorBox ? toStage(s.anchorBox, stage) : undefined }));
+  const tgStage = (tg) => (tg && tg.box ? { ...tg, box: toStage(tg.box, stage) } : tg);
+  const explicitShots = (take.shots || []).map((s) => ({ ...s, t: O(s.t), targets: (s.targets || []).map(tgStage), anchor: s.kind === "focus" ? tgStage(s.anchor) : s.anchor, extras: (s.extras || []).map(tgStage), anchorBox: s.anchorBox ? toStage(s.anchorBox, stage) : undefined }));
   const tracks = Object.fromEntries(Object.entries(take.tracks || {}).map(([k, v]) => [k, v.map(([t, x, y, w, h]) => [O(t), x - stage.x, y - stage.y, w, h])]));
   const posterAtFull = take.poster?.at != null ? O(take.poster.at) : fullMs;
 

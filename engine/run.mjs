@@ -3,6 +3,8 @@ import path from "node:path";
 import { openContext, gotoStart } from "./browser.mjs";
 import { createHelpers, ExpectError, StepError } from "./helpers.mjs";
 import { DryTake, RecordTake } from "./capture.mjs";
+import { rmSync, writeFileSync } from "node:fs";
+import { buildRehearsal } from "./rehearsal.mjs";
 
 export function takeDirFor(config, clip, takeId = "latest") {
   return path.join(config.cacheDir, clip.id, takeId);
@@ -24,9 +26,11 @@ export async function runClip({ browser, baseUrl, config, clip, mode = "dry", ta
     log(`${clip.id}: opening ${clip.start}`);
     const nav = await gotoStart(page, config, baseUrl, clip.start);
     result.url = nav.url; result.status = nav.status;
+    const rehearsalDir = path.join(config.cacheDir, clip.id, "rehearsal");
+    if (!record) rmSync(rehearsalDir, { recursive: true, force: true });
     take = record
       ? new RecordTake({ clip, config, page, takeDir: takeDirFor(config, clip, takeId) })
-      : new DryTake({ clip, config });
+      : new DryTake({ clip, config, page, rehearsalDir });
     const runConfig = { ...config, crops: { ...(config.crops || {}), ...(config.sizes || {}), ...(clip.crops || {}) } };
     const h = createHelpers({ page, config: runConfig, take, fast: !record });
     // Stage exclusions (§10.3): measure selectors once the page is ready; rects pass through.
@@ -68,6 +72,12 @@ export async function runClip({ browser, baseUrl, config, clip, mode = "dry", ta
     result.durationMs = finished.durationMs ?? take.t();
     result.warnings = take.warnings;
     result.actions = take.actions.length;
+    if (!record) {
+      const rehearsal = buildRehearsal({ config, clip, take: { shots: take.shots, actions: take.actions, marks: take.marks, holds: take.holds || [], stage: take.stage, beatShots: take.beatShots } });
+      writeFileSync(path.join(rehearsalDir, "rehearsal.json"), JSON.stringify(rehearsal, null, 2));
+      result.rehearsal = rehearsal;
+      if (!rehearsal.ok) result.ok = false;
+    }
     if (record) {
       result.take = finished; result.takeDir = take.takeDir; result.frames = finished.frames.length; result.frameSize = finished.frameSize;
       const want = { width: Math.round(config.viewport.width * config.deviceScaleFactor), height: Math.round(config.viewport.height * config.deviceScaleFactor) };
