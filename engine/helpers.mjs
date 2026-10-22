@@ -280,8 +280,13 @@ export function createHelpers({ page, config, take, fast = false }) {
           // Clamp to what the container can still scroll, so the excess does not chain to the page behind it.
           if (within) {
             const range = await (within.first ? within.first() : within).evaluate((el) => ({ up: el.scrollTop, down: el.scrollHeight - el.clientHeight - el.scrollTop })).catch(() => null);
+            const wanted = delta;
             if (range) delta = Math.max(-range.up, Math.min(range.down, delta));
-            if (Math.abs(delta) <= 1) break;
+            if (Math.abs(delta) <= 1) {
+              // the container cannot scroll further yet; content may still be growing, so wait and look again
+              if (Math.abs(wanted) > 1 && attempt < 3) { await sleep(200); continue; }
+              break;
+            }
           }
           await h.scrollBy(Math.round(delta), { within, ms });
           const after = await loc.boundingBox({ timeout: 5000 });
