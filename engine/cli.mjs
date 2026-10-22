@@ -17,7 +17,7 @@ const USAGE = `ui-clips <command> [args] [--project <dir>] [--json]
 Options: --project <dir>  --json  --changed
          export: --zoom off|gentle|pronounced  --feel brisk|calm|lazy  (re-render the camera from the same take)
                  --fast (faster VP9, no GIF, camera at export width)
-         sheet:  --beats (one frame per mark)      doctor: --no-url`;
+         sheet:  --beats (one frame per mark)  --size <name> (from that output size)      doctor: --no-url`;
 
 const { values: opts, positionals } = parseArgs({
   allowPositionals: true,
@@ -29,6 +29,7 @@ const { values: opts, positionals } = parseArgs({
     feel: { type: "string" },
     fast: { type: "boolean", default: false },
     beats: { type: "boolean", default: false },
+    size: { type: "string" },
     "no-url": { type: "boolean", default: false },
     help: { type: "boolean", short: "h", default: false },
   },
@@ -150,7 +151,7 @@ try {
       const { contactSheet } = await import("./sheet.mjs");
       const { takeDirFor } = await import("./run.mjs");
       const [clip] = await loadClips(config, arg);
-      const r = await contactSheet({ config, clip, takeDir: takeDirFor(config, clip), outDir: config.outDir, beats: opts.beats });
+      const r = await contactSheet({ config, clip, takeDir: takeDirFor(config, clip), outDir: config.outDir, beats: opts.beats, size: opts.size || "full" });
       emit({ ok: true, ...r }, `✓ ${r.path}\n` + r.legend.frames.map((f) => `  ${String(f.cell).padStart(2)}  ${String(f.t).padStart(6)} ms  ${f.label}`).join("\n"));
       break;
     }

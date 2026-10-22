@@ -1,6 +1,13 @@
 # Changelog
 
-## Unreleased (milestone 2, pass B: camera direction, stage, sizes, speed, sub-clips)
+## Unreleased (milestone 2, pass C: wide modes, settled posters, enforced rest)
+
+- Wide shots: `contain` (the opening framing; opening shot only) and `cover` (frame filled at full stage height, sides cropped, anchored left/right/center or a target; default for any later wide); `h.shot("opening")` returns to the first framing
+- Posters and contact-sheet cells render through the camera per output size, using the window a move settles on; `sheet --size <name>`
+- §13 rest is enforced again: every camera size must start and end at the opening framing, and a crossfade loop must rest there for 0.4 s before the fade
+- Spec §7.1, §8, §10.3, §10.4, §13 and appendix D updated to match (2026-10-22)
+
+## Milestone 2, pass B: camera direction, stage, sizes, speed, sub-clips
 
 - Camera: `camera.feel` presets brisk / calm (default) / lazy with the appendix D spring constants; re-aim (an action outside the shot by more than a quarter of its width starts a new shot) and cap (a box over 65% of the stage stays wide); the rest margin before the end scales with the feel and the camera snaps to wide within a pixel
 - Explicit track: `h.shot("wide" | { focus: [targets], padding }, { ms })`, eased in-out moves, 600 ms minimum hold, click-during-move warning, half-output-width floor; explicit overrides auto in its window; `h.zoomTo`/`h.zoomOut` are shorthands

@@ -34,7 +34,7 @@ export default {
     await h.waitForMotion();
     await h.mark("ticked");
     await h.hold(900);
-    await h.shot("wide", { ms: 700 });
+    await h.shot("opening", { ms: 700 });                      // back to the opening framing (§13: at rest at both ends)
     await h.parkCursor();
     await h.mark("b5-end");
     await h.hold(1600);

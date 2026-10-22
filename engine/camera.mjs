@@ -59,6 +59,25 @@ export function frameAround(box, geo, stage, { align = "center" } = {}) {
 }
 const windowScale = (win, geo) => geo.wide.w / win.w;
 
+/**
+ * Wide shots (§10.3). "contain": the whole stage fitted to the output width, top-aligned, fill below (the opening
+ * framing). "cover": the output frame filled at full stage height, sides cropped, anchored left | right | center or
+ * on a target box. A stage narrower than the cover frame falls back to full width, top-aligned.
+ */
+export function wideWindow(geo, stage, { mode = "contain", anchor = "center", anchorBox = null } = {}) {
+  if (mode !== "cover") return { ...geo.wide };
+  let w = Math.min(stage.w, stage.h * geo.aspect);
+  w = Math.max(w, Math.min(geo.floorW, stage.w));
+  const h = w / geo.aspect;
+  let x;
+  if (anchorBox) x = anchorBox.x + anchorBox.w / 2 - w / 2;
+  else if (anchor === "left") x = 0;
+  else if (anchor === "right") x = stage.w - w;
+  else x = (stage.w - w) / 2;
+  x = clamp(x, 0, Math.max(0, stage.w - w));
+  return { x, y: 0, w, h };
+}
+
 /* ----------------------------------------------------------------------------------------------------------------- */
 /* Auto                                                                                                                 */
 
@@ -142,6 +161,14 @@ function autoTargetAt(shots, T, geo, stage) {
 export function buildExplicit(shotsIn, { tracks = {}, stage, geo, actions = [] }) {
   const warnings = [];
   const shots = [...shotsIn].sort((a, b) => a.t - b.t).map((s) => ({ ...s, ms: s.ms ?? CAMERA.explicitDefaultMoveMs, padding: s.padding ?? CAMERA.explicitPadding }));
+  // Only the opening shot may be wide("contain"); a later "wide" defaults to cover; "opening" returns to the first framing.
+  shots.forEach((s, i) => {
+    if (s.kind !== "wide") return;
+    if (i === 0) { s.mode = s.mode || "contain"; return; }
+    if (s.mode === "contain") { warnings.push(`camera: shot ${i + 1} asks for wide("contain") after the opening; treated as a return to the opening framing`); s.kind = "opening"; delete s.mode; delete s.anchor; return; }
+    s.mode = "cover";
+    s.anchor = s.anchor || "center";
+  });
   for (let i = 1; i < shots.length; i++) {
     const minT = shots[i - 1].t + shots[i - 1].ms + CAMERA.explicitMinHoldMs;
     if (shots[i].t < minT) { warnings.push(`camera: shot ${i + 1} at ${Math.round(shots[i].t)} ms moved to ${Math.round(minT)} ms so the previous shot holds ${CAMERA.explicitMinHoldMs} ms`); shots[i].t = minT; }
@@ -154,8 +181,13 @@ export function buildExplicit(shotsIn, { tracks = {}, stage, geo, actions = [] }
     for (const x of samples) { if (x[0] <= T) s = x; else break; }
     return { x: s[1], y: s[2], w: s[3], h: s[4] };
   };
+  let openingWindow = null;
   const targetWindow = (s, T) => {
-    if (s.kind === "wide") return { ...geo.wide };
+    if (s.kind === "opening") return openingWindow ? { ...openingWindow } : { ...geo.wide };
+    if (s.kind === "wide") {
+      const anchorBox = s.anchorTrack ? trackBox(s.anchorTrack, T) : s.anchorBox || null;
+      return wideWindow(geo, stage, { mode: s.mode, anchor: s.anchor, anchorBox });
+    }
     let u = null, missing = [];
     for (const tg of s.targets || []) {
       const b = tg.track ? trackBox(tg.track, T) : tg.box;
@@ -165,6 +197,7 @@ export function buildExplicit(shotsIn, { tracks = {}, stage, geo, actions = [] }
     const padded = padBox(u, stage, { absolute: s.padding });
     return frameAround(padded, geo, stage);
   };
+  if (shots.length) openingWindow = targetWindow(shots[0], shots[0].t);
   const windowAt = (T, stateAtStart) => {
     let cur = null;
     for (const s of shots) if (s.t <= T) cur = s; else break;
@@ -177,7 +210,15 @@ export function buildExplicit(shotsIn, { tracks = {}, stage, geo, actions = [] }
     const e = easeInOutCubic(clamp(u, 0, 1));
     return { x: from.x + (target.x - from.x) * e, y: from.y + (target.y - from.y) * e, w: from.w + (target.w - from.w) * e, h: from.h + (target.h - from.h) * e };
   };
-  return { windowAt, shots, warnings, firstT: shots.length ? shots[0].t : Infinity };
+  return { windowAt, shots, warnings, firstT: shots.length ? shots[0].t : Infinity, opening: openingWindow };
+}
+
+/** The window a moment is really about: when T falls inside an explicit move, the window where that move settles. */
+export function settledWindowAt(frames, explicitShots, T) {
+  let cur = null;
+  for (const s of explicitShots || []) { const t0 = s.startMs ?? s.t; if (t0 <= T) cur = { t: t0, ms: s.moveMs ?? s.ms ?? 0 }; else break; }
+  const T2 = cur && T < cur.t + cur.ms ? cur.t + cur.ms : T;
+  return windowAt(frames, Math.min(T2, frames[frames.length - 1].t));
 }
 
 /* ----------------------------------------------------------------------------------------------------------------- */
@@ -224,12 +265,14 @@ export function buildTrack({ actions = [], explicitShots = [], tracks = {}, stag
   }
   const shots = [
     ...autoShots.map((s) => ({ source: "auto", startMs: s.startMs, endMs: s.endMs })),
-    ...explicit.shots.map((s) => ({ source: "explicit", startMs: s.t, kind: s.kind, moveMs: s.ms })),
+    ...explicit.shots.map((s) => ({ source: "explicit", startMs: s.t, kind: s.kind, mode: s.mode, anchor: s.anchor, moveMs: s.ms })),
   ];
-  return { frames, shots, warnings, geo };
+  const opening = explicit.opening && explicit.firstT <= 1000 / fps ? explicit.opening : { ...geo.wide };
+  return { frames, shots, warnings, geo, opening };
 }
 
-export const atRest = (f, geo) => Math.abs(f.w - geo.wide.w) < 1 && Math.abs(f.x) < 1 && Math.abs(f.y) < 1;
+/** Rest = the opening framing (wide for auto tracks, the first explicit shot otherwise). */
+export const atRest = (f, opening) => Math.abs(f.w - (opening.wide ? opening.wide.w : opening.w)) < 1 && Math.abs(f.x - (opening.wide ? 0 : opening.x)) < 1 && Math.abs(f.y - (opening.wide ? 0 : opening.y)) < 1;
 
 /** ffmpeg sendcmd text for a `crop` filter on the stage canvas (device px, even values). */
 export function sendcmdText(frames, { deviceScaleFactor: dsf, canvasW, canvasH }) {

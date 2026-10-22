@@ -6,7 +6,7 @@ import path from "node:path";
 import { retime, frameAt } from "./retime.mjs";
 import { buildTimeMap } from "./timemap.mjs";
 import { stageRect, stageFilter, toStage, maskCmdText } from "./stage.mjs";
-import { buildTrack, atRest, sendcmdText, windowAt, frameGeometry, frameAround, padBox, FEEL } from "./camera.mjs";
+import { buildTrack, atRest, sendcmdText, windowAt, settledWindowAt, frameGeometry, frameAround, padBox, FEEL } from "./camera.mjs";
 import { decideReturn, crossfadeFilter, LOOP } from "./loop.mjs";
 import { loadClips } from "./config.mjs";
 
@@ -149,7 +149,7 @@ export async function exportClip({ config, clip, takeDir, outDir, log = () => {}
   const O = (t) => tm.toOutput(t);
   const marks = (take.marks || []).map((m) => ({ ...m, t: O(m.t) }));
   const actions = (take.actions || []).map((a) => ({ ...a, t: O(a.t), ...toStage(a, stage) }));
-  const explicitShots = (take.shots || []).map((s) => ({ ...s, t: O(s.t), targets: (s.targets || []).map((tg) => (tg.box ? { ...tg, box: toStage(tg.box, stage) } : tg)) }));
+  const explicitShots = (take.shots || []).map((s) => ({ ...s, t: O(s.t), targets: (s.targets || []).map((tg) => (tg.box ? { ...tg, box: toStage(tg.box, stage) } : tg)), anchorBox: s.anchorBox ? toStage(s.anchorBox, stage) : undefined }));
   const tracks = Object.fromEntries(Object.entries(take.tracks || {}).map(([k, v]) => [k, v.map(([t, x, y, w, h]) => [O(t), x - stage.x, y - stage.y, w, h])]));
   const posterAtFull = take.poster?.at != null ? O(take.poster.at) : fullMs;
 
@@ -178,7 +178,8 @@ export async function exportClip({ config, clip, takeDir, outDir, log = () => {}
       geo = track.geo;
       frames = track.frames.slice(fa, fb).map((f) => ({ ...f, t: f.t - track.frames[fa].t }));
       for (const w of track.warnings) if (!result.warnings.includes(w)) result.warnings.push(w);
-      info.shots = track.shots; info.feel = feelName; info.zoom = mode;
+      info.shots = track.shots; info.feel = feelName; info.zoom = mode; info.opening = track.opening;
+      info.localShots = track.shots.filter((x) => x.source === "explicit").map((x) => ({ ...x, startMs: x.startMs - T0 }));
       padBelow = Math.max(padBelow, ...frames.map((f) => f.y + f.h - stage.h));
     } else {
       const focus = sz.rect ? { box: sz.rect } : resolveFocus(take, sz.name, sz.focus, stage);
@@ -224,11 +225,19 @@ export async function exportClip({ config, clip, takeDir, outDir, log = () => {}
     await ff([...seek, "-i", canvasFile, "-vf", vf, "-frames:v", String(fb - fa), ...lossless, file]);
     info.render.file = file; info.render.canvasH = canvasH;
     if (frames) {
-      const restStart = atRest(frames[0], geo), restEnd = atRest(frames[frames.length - 1], geo);
-      const explicitTrack = info.shots.some((s) => s.source === "explicit");
-      const detail = `${restStart ? "wide" : frames[0].scale.toFixed(2) + "×"} at start, ${restEnd ? "wide" : frames[frames.length - 1].scale.toFixed(2) + "×"} at end`;
-      if (!clip.isSubclip && mode !== "off" && !explicitTrack) check(`camera rest (${sz.name})`, restStart && restEnd, detail);
-      else if (!clip.isSubclip && explicitTrack && !(restStart && restEnd)) result.warnings.push(`camera (${sz.name}): the explicit track ends ${detail.split(", ")[1]}; the loop or cut carries the return`);
+      // §13: the camera is at rest (the opening framing) at both ends; with a crossfade loop it rests for at least
+      // 0.4 s before the fade so frame matches frame.
+      const opening = info.opening;
+      const restStart = atRest(frames[0], opening), restEnd = atRest(frames[frames.length - 1], opening);
+      const label = (f, ok) => ok ? "opening framing" : `${f.scale.toFixed(2)}× at (${Math.round(f.x)}, ${Math.round(f.y)})`;
+      const detail = `${label(frames[0], restStart)} at start, ${label(frames[frames.length - 1], restEnd)} at end`;
+      if (!clip.isSubclip && mode !== "off") check(`camera rest (${sz.name})`, restStart && restEnd, detail);
+      if (!clip.isSubclip && (clip.loop || "none") === "crossfade") {
+        const need = LOOP.crossfadeMs + 400;
+        const tail = frames.filter((f) => f.t >= frames[frames.length - 1].t - need + 1);
+        const ok = tail.every((f) => atRest(f, opening));
+        check(`loop camera rest (${sz.name})`, ok, ok ? `at the opening framing for the last ${need} ms (0.4 s rest + 0.4 s fade)` : `the camera is still moving inside the last ${need} ms; end the track with h.shot("opening") then hold 0.4 s before the fade`);
+      }
       const minW = Math.min(...frames.map((f) => f.w));
       check(`camera floor (${sz.name})`, minW >= geo.floorW - 0.5, `narrowest window ${Math.round(minW)} CSS px, floor ${Math.round(geo.floorW)} (half of ${sz.outW} px)`);
     }
@@ -325,7 +334,7 @@ export async function exportClip({ config, clip, takeDir, outDir, log = () => {}
     if (posterNote) result.warnings.push(posterNote);
     const posterLocalT = posterT - T0;
     for (const sz of Object.values(result.sizes)) {
-      const win = sz.render.frames ? windowAt(sz.render.frames, posterLocalT) : sz.render.staticWin;
+      const win = sz.render.frames ? settledWindowAt(sz.render.frames, sz.localShots, posterLocalT) : sz.render.staticWin;
       const stageAtPoster = { ...stage, masks: stage.masks.map((m, i) => { const sm = maskSamples[i]; if (!sm) return m; let s = sm[0]; for (const x of sm) { if (x[0] <= posterT) s = x; else break; } return { ...m, x: s[1], y: s[2], w: s[3], h: s[4] }; }) };
       const canvas = stageFilter(stageAtPoster, { dsf, fill, padBelowCss: Math.max(sz.render.padBelow, Math.ceil(win.y + win.h - stage.h)) });
       const cropF = `crop=${even(win.w * dsf)}:${even(win.h * dsf)}:${even(win.x * dsf)}:${even(win.y * dsf)}`;

@@ -79,3 +79,44 @@ test("sendcmd lines are even device pixels inside the canvas", () => {
   assert.equal(text.split("\n")[0], "0.0000 crop w 2880, crop h 1800, crop x 0, crop y 0;");
   assert.equal(text.split("\n")[1], "0.0333 crop w 1800, crop h 1126, crop x 1000, crop y 602;");
 });
+
+import { wideWindow, settledWindowAt } from "../engine/camera.mjs";
+
+test("wide: contain is the stage at output width; cover fills the frame at full stage height with an anchor", () => {
+  const st = { x: 0, y: 0, w: 1190, h: 1000, masks: [], cuts: [] };
+  const card = frameGeometry(st, { aspect: 0.8, outWidthPx: 960, deviceScaleFactor: 2 });
+  assert.deepEqual(wideWindow(card, st, { mode: "contain" }), { x: 0, y: 0, w: 1190, h: 1487.5 });
+  assert.deepEqual(wideWindow(card, st, { mode: "cover", anchor: "right" }), { x: 390, y: 0, w: 800, h: 1000 });
+  assert.deepEqual(wideWindow(card, st, { mode: "cover", anchor: "left" }), { x: 0, y: 0, w: 800, h: 1000 });
+  assert.deepEqual(wideWindow(card, st, { mode: "cover" }), { x: 195, y: 0, w: 800, h: 1000 });
+  assert.deepEqual(wideWindow(card, st, { mode: "cover", anchorBox: { x: 1000, y: 0, w: 100, h: 50 } }), { x: 390, y: 0, w: 800, h: 1000 }, "a target anchor is clamped inside the stage");
+  const wide169 = frameGeometry(st, { aspect: 16 / 9, outWidthPx: 1440, deviceScaleFactor: 2 });
+  assert.deepEqual(wideWindow(wide169, st, { mode: "cover" }), { x: 0, y: 0, w: 1190, h: 669.375 }, "a frame wider than the stage keeps full width, top-aligned");
+});
+
+test("explicit: only the opening may be contain; a later wide is cover; opening returns to the first framing; rest is the opening", () => {
+  const st = { x: 0, y: 0, w: 1190, h: 1000, masks: [], cuts: [] };
+  const shots = [
+    { t: 0, kind: "wide", ms: 0 },
+    { t: 1000, kind: "wide", anchor: "right", ms: 600 },
+    { t: 3000, kind: "wide", mode: "contain", ms: 600 },
+    { t: 5000, kind: "opening", ms: 600 },
+  ];
+  const track = buildTrack({ explicitShots: shots, stage: st, aspect: 0.8, outWidthPx: 960, mode: "gentle", feel: "calm", durationMs: 7000, fps: 30 });
+  const kinds = track.shots.filter((s) => s.source === "explicit").map((s) => `${s.kind}:${s.mode || ""}`);
+  assert.deepEqual(kinds, ["wide:contain", "wide:cover", "opening:", "opening:"]);
+  assert.ok(track.warnings.some((w) => /contain"\) after the opening/.test(w)));
+  assert.deepEqual(track.opening, { x: 0, y: 0, w: 1190, h: 1487.5 });
+  assert.ok(atRest(track.frames[0], track.opening));
+  const covered = windowAt(track.frames, 1700);
+  assert.ok(Math.abs(covered.w - 800) < 1e-6 && Math.abs(covered.x - 390) < 1e-6, "cover anchored right at 1.6 s");
+  assert.ok(atRest(track.frames[track.frames.length - 1], track.opening), "ends at the opening framing");
+  assert.ok(!atRest(covered, track.opening));
+});
+
+test("settledWindowAt returns the window where an active move lands", () => {
+  const frames = [{ t: 0, x: 0, y: 0, w: 1190, h: 1487.5 }, { t: 300, x: 195, y: 0, w: 995, h: 1243 }, { t: 600, x: 390, y: 0, w: 800, h: 1000 }, { t: 900, x: 390, y: 0, w: 800, h: 1000 }];
+  const shots = [{ startMs: 0, moveMs: 600 }];
+  assert.deepEqual(settledWindowAt(frames, shots, 150), frames[2]);
+  assert.deepEqual(settledWindowAt(frames, shots, 900), frames[3]);
+});

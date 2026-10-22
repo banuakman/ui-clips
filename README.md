@@ -64,7 +64,7 @@ Two ways to direct it, which can mix; explicit wins in its window.
 
 **Auto** (`zoom` on): the action log drives the camera at export time. Two or more actions within 3 s, or a dwell over 1.5 s, open a shot on the cluster's padded box; the box grows while actions land inside or near it; an action further out than a quarter of the shot's width starts a new shot, so the camera moves; a box wider than 65% of the stage stays wide. The shot releases a second after the last action, with a 1.2 s minimum and a rest before the end. Position and scale follow a critically damped spring whose `camera.feel` is `brisk` (about half a second), `calm` (just under a second, default) or `lazy`.
 
-**Explicit**: a track keyed to marks, written in the clip. `h.shot("wide")` or `h.shot({ focus: [targets], padding: 24 }, { ms: 600 })` sets the next frame: the smallest frame of the output aspect containing the targets, never narrower than half the output width in CSS px. Moves ease in-out over the stated duration, each shot holds at least 600 ms, and a click inside a move is flagged. Targets are locators (box measured at the shot) or names from `h.track(name, locator)`, whose box is sampled every frame so the focus follows a scrolling drawer. `h.speed(factor, fn)` plays a stretch faster at export with the frames resampled.
+**Explicit**: a track keyed to marks, written in the clip. `h.shot("wide")`, `h.shot("opening")` or `h.shot({ focus: [targets], padding: 24 }, { ms: 600 })` sets the next frame: a focus is the smallest frame of the output aspect containing the targets, never narrower than half the output width in CSS px. A wide shot has two modes: `contain` fits the whole stage to the output width, top-aligned with the fill below, and only the opening shot may use it; `cover` fills the frame at full stage height and crops the sides, anchored `left`, `right`, `center`, a locator or a tracked name (`h.shot("wide", { mode: "cover", anchor: "right" }, { ms: 600 })`), and is the default for any later wide. `"opening"` returns to the first framing, which is where every clip must end. Moves ease in-out over the stated duration, each shot holds at least 600 ms, and a click inside a move is flagged. Targets are locators (box measured at the shot) or names from `h.track(name, locator)`, whose box is sampled every frame so the focus follows a scrolling drawer. `h.speed(factor, fn)` plays a stretch faster at export with the frames resampled. Posters and contact-sheet cells render through the camera at their moment, using the window a move settles on when the moment falls inside one.
 
 Every output size gets its own track for its aspect, rendered from the 2× source in one ffmpeg pass per size, so nothing is upscaled. Re-render without re-recording: `ui-clips export <clip> --zoom pronounced --feel brisk`, or `--fast` while iterating (faster VP9, no GIF, camera at export width).
 
@@ -86,7 +86,7 @@ See [`examples/_template/`](examples/_template/) for an annotated config and cli
 | `h.waitForMotion()` | Wait for CSS animations and transitions to finish |
 | `h.visible(l)` / `h.hidden(l)` / `h.text(l, s)` | Expectations for `expect` |
 | `h.mark(name, { focus })` | Name a moment (poster, sub-clip boundary, crop focus); a lossless screenshot is taken at the next hold |
-| `h.shot("wide" \| { focus, padding }, { ms })` | Explicit camera keyframe (see The camera) |
+| `h.shot("wide" \| "opening" \| { focus, padding }, { ms, mode, anchor })` | Explicit camera keyframe (see The camera) |
 | `h.track(name, locator)` | Sample a target's box every frame so a focus shot can follow it |
 | `h.speed(factor, fn)` | Run a step; that stretch plays `factor`× faster at export |
 | `h.trim(fn)` | Run a step but cut its wait from the video |
@@ -102,7 +102,7 @@ ui-clips inspect <url|clip>     visible text, ARIA snapshot, candidate locators 
 ui-clips dry-run [clip|all]     resolve locators, run actions, check expectations; no capture
 ui-clips record  [clip|all]     capture 2× frames (+ action log)
 ui-clips export  [clip|all]     camera, loop, presets, crops, posters, GIF, manifest, snippet
-ui-clips sheet   <clip>         contact sheet PNG of key frames (+ a JSON legend); --beats for one frame per mark
+ui-clips sheet   <clip>         contact sheet PNG of key frames (+ a JSON legend); --beats for one frame per mark, --size card for that output
 ui-clips list                   clips, last recorded, outputs, changed since export
 ```
 

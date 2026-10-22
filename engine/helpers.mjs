@@ -334,8 +334,16 @@ export function createHelpers({ page, config, take, fast = false }) {
      * Explicit camera shot (§10.3): "wide", or { focus: [targets], padding }. Targets are locators (box measured now)
      * or track names (per-frame boxes from h.track). The move eases in-out over `ms` and is rendered at export.
      */
-    async shot(spec, { ms = 600 } = {}) {
-      if (spec === "wide") { take.shot({ kind: "wide", ms }); return; }
+    async shot(spec, { ms = 600, mode, anchor } = {}) {
+      if (spec === "opening") { take.shot({ kind: "opening", ms }); return; }
+      if (spec === "wide") {
+        const entry = { kind: "wide", ms, mode };
+        if (typeof anchor === "string") entry.anchor = anchor;
+        else if (anchor && anchor.first) { const b = await boxOf(anchor, { scrollIntoView: false }).catch(() => null); if (b) entry.anchorBox = roundBox(b); }
+        if (typeof anchor === "string" && trackTargets[anchor]) { entry.anchorTrack = anchor; delete entry.anchor; }
+        take.shot(entry);
+        return;
+      }
       const targets = [];
       for (const tg of spec.focus || []) {
         if (typeof tg === "string") targets.push({ track: tg });
