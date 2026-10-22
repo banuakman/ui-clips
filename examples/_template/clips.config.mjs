@@ -5,7 +5,7 @@ export default {
   deviceScaleFactor: 2,
   colorScheme: "light",                         // "light" | "dark" | "no-preference"
   fps: 30,
-  cursor: { style: "dot", color: "#1f2937", size: 16, ripple: true },  // "dot" | "arrow" | "none"
+  cursor: { style: "arrow", color: "#1f2937", size: 22, ripple: true },  // "arrow" (default) | "dot" | "none"
   zoom: { mode: "off" },                        // "off" | "gentle" | "pronounced"
   outputs: ["mp4", "webm", "poster"],           // + "gif"
   quality: { crf: 20, webmCrf: 30, maxWidth: 1440 },

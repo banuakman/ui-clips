@@ -140,10 +140,17 @@ export function createHelpers({ page, config, take, fast = false }) {
       await runExpect(expect, label);
     },
 
-    async type(target, text, { cps = 12, expect, clear = false } = {}) {
+    async type(target, text, { cps = 12, expect, clear = false, stepAside = { x: 32, y: 24, ms: 250 } } = {}) {
       const label = `type "${text}" into ${describe(target)}`;
       try {
         await h.click(target);
+        const clickPoint = { x: cur.x, y: cur.y };
+        // Step aside (appendix D): ease the arrow down-right of the click point so the caret and words stay uncovered.
+        let aside = null;
+        if (stepAside && !fast) {
+          aside = { x: clickPoint.x + stepAside.x, y: clickPoint.y + stepAside.y };
+          await moveToPoint(aside, { ms: stepAside.ms });
+        }
         if (clear) await page.keyboard.press(process.platform === "darwin" ? "Meta+A" : "Control+A").then(() => page.keyboard.press("Backspace"));
         // Absolute schedule: round-trip latency per key does not accumulate into the clip length.
         const base = 1000 / cps;
@@ -155,7 +162,8 @@ export function createHelpers({ page, config, take, fast = false }) {
           const wait = due - performance.now();
           if (wait > 0) await sleep(wait);
         }
-        take.log({ kind: "type", x: Math.round(cur.x), y: Math.round(cur.y), w: 0, h: 0, locator: describe(target), text });
+        take.log({ kind: "type", x: Math.round(clickPoint.x), y: Math.round(clickPoint.y), w: 0, h: 0, locator: describe(target), text,
+          ...(aside ? { stepAside: { x: Math.round(aside.x), y: Math.round(aside.y) } } : {}) });
       } catch (e) { throw new StepError(label, e); }
       await runExpect(expect, label);
     },

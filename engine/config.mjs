@@ -14,7 +14,7 @@ export const DEFAULTS = Object.freeze({
   deviceScaleFactor: 2,
   colorScheme: "light",                  // "light" | "dark" | "no-preference" (as the site is)
   fps: 30,
-  cursor: { style: "dot", color: "#1f2937", size: 16, ripple: true },
+  cursor: { style: "arrow", color: "#1f2937", size: 22, ripple: true },
   zoom: { mode: "off" },                 // M2 flips the default to "gentle" when the camera lands
   outputs: ["mp4", "webm", "poster"],
   quality: { crf: 20, webmCrf: 30, maxWidth: 1440, jpeg: 92 },

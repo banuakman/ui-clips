@@ -41,15 +41,17 @@ my-clips/
 └── out/                   # rm-home.mp4, rm-home.webm, rm-home.poster.png, rm-home.poster@2x.png, manifest.json
 ```
 
+The cursor is an injected SVG: `cursor.style` is `"arrow"` by default (a charcoal arrow about 22 px tall with a white outline, hotspot at the tip), with `"dot"` and `"none"` as options; `cursor.color` recolours it for a brand variant.
+
 See [`examples/_template/`](examples/_template/) for an annotated config and clip, and [`examples/todo-demo/`](examples/todo-demo/) for a working project against a local demo page.
 
 ### Helpers available in `steps({ page, h })`
 
 | Helper | Does |
 |---|---|
-| `h.click(locator, { expect })` | Bezier cursor move, pause, press with ripple, release; then `expect` must hold |
+| `h.click(locator, { expect })` | Bezier cursor move, pause, press (the arrow dips and a ring blooms from its tip), release; then `expect` must hold |
 | `h.hover(locator, { holdMs })` | Move and dwell |
-| `h.type(locator, text, { cps })` | Click, then type at a human pace (default 12 chars/s) |
+| `h.type(locator, text, { cps })` | Click, step the cursor aside so the caret stays visible, then type at a human pace (default 12 chars/s) |
 | `h.press(key, { expect })` | Press a key (Enter, Escape, Tab…) |
 | `h.select(locator, optionText)` | Native `<select>` or custom dropdown |
 | `h.scrollBy(px, { within })` / `h.scrollTo(locator, { within })` | Smooth wheel scroll |
