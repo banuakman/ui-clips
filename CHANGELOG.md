@@ -7,6 +7,9 @@
 - §13 rest is enforced again: every camera size must start and end at the opening framing, and a crossfade loop must rest there for 0.4 s before the fade
 - Spec §7.1, §8, §10.3, §10.4, §13 and appendix D updated to match (2026-10-22)
 - A focus frame that fits the stage stays inside it, so no fill shows below a pushed-in shot; only the contain wide (or a frame taller than the stage) reaches into the fill
+- Focus targets count only where they can be seen: boxes are clipped to the stage and a target entirely off-screen is skipped until it scrolls in, so an off-screen drawer section no longer stretches the frame into the fill
+- An opening shot logged within the first frame of the take applies from t = 0 with no move; `scrollTo` with `align: "start"` accepts a landing within 8 px instead of retrying
+- New §13-style check: every click must land inside the frame the viewer sees at that moment (`clicks in frame`), per output size
 - Tracked targets: all tracks are read in parallel each tick (sample rate set by the slowest read, not their sum) and boxes are interpolated between samples at export, so a focus following a scrolling element moves as a ramp rather than a staircase
 
 ## Milestone 2, pass B: camera direction, stage, sizes, speed, sub-clips

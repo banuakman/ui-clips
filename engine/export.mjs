@@ -232,6 +232,10 @@ export async function exportClip({ config, clip, takeDir, outDir, log = () => {}
       const label = (f, ok) => ok ? "opening framing" : `${f.scale.toFixed(2)}× at (${Math.round(f.x)}, ${Math.round(f.y)})`;
       const detail = `${label(frames[0], restStart)} at start, ${label(frames[frames.length - 1], restEnd)} at end`;
       if (!clip.isSubclip && mode !== "off") check(`camera rest (${sz.name})`, restStart && restEnd, detail);
+      // Every click must land inside the frame the viewer sees at that moment (what the clip is about).
+      const clicks = actions.filter((a) => a.kind === "click" && a.t >= T0 && a.t < T1);
+      const outside = clicks.filter((a) => { const f = windowAt(frames, a.t - T0); const cx = a.x + a.w / 2, cy = a.y + a.h / 2; return !(cx >= f.x && cx <= f.x + f.w && cy >= f.y && cy <= f.y + Math.min(f.h, stage.h - f.y)); });
+      if (clicks.length) check(`clicks in frame (${sz.name})`, outside.length === 0, outside.length ? `${outside.length} of ${clicks.length} click(s) land outside the frame: ${outside.map((a) => `${(a.locator || "").slice(0, 40)} at ${Math.round(a.t - T0)} ms`).join("; ")}` : `${clicks.length} click(s), all inside the frame`);
       if (!clip.isSubclip && (clip.loop || "none") === "crossfade") {
         const need = LOOP.crossfadeMs + 400;
         const tail = frames.filter((f) => f.t >= frames[frames.length - 1].t - need + 1);

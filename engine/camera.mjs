@@ -29,6 +29,15 @@ export function union(a, b) {
   const x = Math.min(a.x, b.x), y = Math.min(a.y, b.y);
   return { x, y, w: Math.max(a.x + a.w, b.x + b.w) - x, h: Math.max(a.y + a.h, b.y + b.h) - y };
 }
+/** The visible part of a box, or null when it lies entirely outside the stage. */
+export function clipToStage(box, stage) {
+  if (!box) return null;
+  const x0 = Math.max(0, box.x), y0 = Math.max(0, box.y);
+  const x1 = Math.min(stage.w, box.x + box.w), y1 = Math.min(stage.h, box.y + box.h);
+  if (x1 - x0 < 2 || y1 - y0 < 2) return null;
+  return { x: x0, y: y0, w: x1 - x0, h: y1 - y0 };
+}
+
 export function padBox(box, stage, { padding = CAMERA.padding, minPadPx = CAMERA.minPadPx, absolute } = {}) {
   const px = absolute ?? Math.max(minPadPx, box.w * padding), py = absolute ?? Math.max(minPadPx, box.h * padding);
   const x = Math.max(0, box.x - px), y = Math.max(0, box.y - py);
@@ -90,7 +99,7 @@ export function detectShots(actions, { mode, stage, durationMs, geo, feel = "cal
   const maxScale = CAMERA.maxScale[mode] ?? 0;
   const warnings = [];
   if (!(maxScale > 1)) return { shots: [], warnings };
-  const acts = actions.filter((a) => TARGET_KINDS.has(a.kind)).map((a) => ({ ...a, box: boxOfAction(a) })).sort((a, b) => a.t - b.t);
+  const acts = actions.filter((a) => TARGET_KINDS.has(a.kind)).map((a) => ({ ...a, box: clipToStage(boxOfAction(a), stage) || boxOfAction(a) })).sort((a, b) => a.t - b.t);
   const clusters = [];
   for (const a of acts) {
     const last = clusters[clusters.length - 1];
@@ -163,6 +172,8 @@ function autoTargetAt(shots, T, geo, stage) {
 export function buildExplicit(shotsIn, { tracks = {}, stage, geo, actions = [] }) {
   const warnings = [];
   const shots = [...shotsIn].sort((a, b) => a.t - b.t).map((s) => ({ ...s, ms: s.ms ?? CAMERA.explicitDefaultMoveMs, padding: s.padding ?? CAMERA.explicitPadding }));
+  // A first shot logged within the first frame of the take is the opening framing from t = 0.
+  if (shots.length && shots[0].t <= 40) { shots[0].t = 0; shots[0].ms = 0; }   // the opening is a framing, not a move
   // Only the opening shot may be wide("contain"); a later "wide" defaults to cover; "opening" returns to the first framing.
   shots.forEach((s, i) => {
     if (s.kind !== "wide") return;
@@ -184,9 +195,11 @@ export function buildExplicit(shotsIn, { tracks = {}, stage, geo, actions = [] }
       const anchorBox = s.anchorTrack ? trackBox(s.anchorTrack, T) : s.anchorBox || null;
       return wideWindow(geo, stage, { mode: s.mode, anchor: s.anchor, anchorBox });
     }
+    // Targets only count where they can be seen: boxes are clipped to the stage and skipped while fully outside it
+    // (a drawer section below the fold joins the frame as it scrolls in).
     let u = null, missing = [];
     for (const tg of s.targets || []) {
-      const b = tg.track ? trackBox(tg.track, T) : tg.box;
+      const b = clipToStage(tg.track ? trackBox(tg.track, T) : tg.box, stage);
       if (b) u = union(u, b); else missing.push(tg.track || "?");
     }
     if (!u) return { ...geo.wide };

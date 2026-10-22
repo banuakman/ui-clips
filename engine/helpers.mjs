@@ -290,7 +290,8 @@ export function createHelpers({ page, config, take, fast = false }) {
           }
           await h.scrollBy(Math.round(delta), { within, ms });
           const after = await loc.boundingBox({ timeout: 5000 });
-          if (after && after.y >= 0 && after.y + after.height <= vh && (align !== "start" || Math.abs(after.y - cb.y - 16) <= 2 || attempt > 0)) break;
+          const landed = align === "start" ? Math.abs(after.y - cb.y - 16) <= 8 : true;
+          if (after && after.y >= 0 && after.y + after.height <= vh && (landed || attempt > 0)) break;
           await sleep(150);
         }
       } catch (e) { throw new StepError(label, e); }

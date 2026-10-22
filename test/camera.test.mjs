@@ -138,3 +138,24 @@ test("a focus frame that fits the stage never reaches into the fill below", () =
   assert.ok(f.y + f.h <= 1000 + 1e-9, `bottom ${f.y + f.h} stays inside the stage`);
   assert.ok(f.h <= 1000);
 });
+
+import { clipToStage } from "../engine/camera.mjs";
+
+test("focus targets are clipped to the stage and skipped while off-screen", () => {
+  const st = { x: 0, y: 0, w: 1190, h: 1000, masks: [], cuts: [] };
+  assert.equal(clipToStage({ x: 700, y: 1469, w: 400, h: 60 }, st), null, "below the fold: not a target yet");
+  assert.deepEqual(clipToStage({ x: 700, y: 980, w: 400, h: 60 }, st), { x: 700, y: 980, w: 400, h: 20 });
+  const g = frameGeometry(st, { aspect: 0.8, outWidthPx: 960, deviceScaleFactor: 2 });
+  const ex = buildExplicit([{ t: 0, kind: "focus", targets: [{ box: { x: 500, y: 450, w: 150, h: 100 } }, { track: "below" }], padding: 24, ms: 0 }],
+    { tracks: { below: [[0, 700, 1469, 400, 60], [1000, 700, 900, 400, 60]] }, stage: st, geo: g, actions: [] });
+  const early = ex.windowAt(0, () => g.wide), late = ex.windowAt(1000, () => g.wide);
+  assert.ok(early.y + early.h <= 1000 + 1e-9, "no spill while the tracked target is off-screen");
+  assert.ok(late.y + late.h >= 960 - 1e-9 && late.y + late.h <= 1000 + 1e-9, "the frame grows to include the target once it is on screen");
+});
+
+test("a first shot logged within the first frame is the opening framing from t = 0, with no move", () => {
+  const st = { x: 0, y: 0, w: 1190, h: 1000, masks: [], cuts: [] };
+  const track = buildTrack({ explicitShots: [{ t: 4, kind: "wide", mode: "cover", anchor: "left", ms: 600 }], stage: st, aspect: 0.8, outWidthPx: 960, mode: "gentle", feel: "calm", durationMs: 2000, fps: 30 });
+  assert.deepEqual(track.opening, { x: 0, y: 0, w: 800, h: 1000 });
+  assert.ok(atRest(track.frames[0], track.opening), "frame 0 is already the cover framing");
+});
