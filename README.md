@@ -2,7 +2,7 @@
 
 Record short, silent, retina-sharp clips and stills of any web UI from a written scenario, so they can be re-recorded in one command whenever the design changes.
 
-**Status: milestones 1 and 2 (capture and export engine).** The engine records and exports clips with loops, crops, posters, GIFs and an auto-zoom camera; the Claude Code skills that interview you and write clip files arrive in milestone 3. Until then, clip files are written by hand (or by asking Claude with the files below open).
+**Status: milestones 1 to 3 (engine and skills).** The engine records and exports clips with loops, crops, posters, GIFs and a directed camera; three Claude Code skills take you from a URL to the files without writing code. Milestone 4 (docs, evals, v0.1.0) is next.
 
 ## What it does
 
@@ -11,6 +11,18 @@ You describe the moment: "the Today list → type a task → press Enter → the
 - **Scripted, not performed.** One small file per clip; identical every take.
 - **Crisp by default.** 2× capture, lanczos downscale, H.264 tuned for flat UI.
 - **Described, not guessed.** Every step states the visual change it must produce (`expect`); the dry run proves it before anything is recorded.
+
+## With Claude Code
+
+Install the plugin (`claude plugin marketplace add banuakman/ui-clips` then `claude plugin install ui-clips@ui-clips`, or `claude --plugin-dir .` from a checkout) and ask:
+
+| Skill | Does |
+|---|---|
+| `/ui-clips:new-clip-project` | one round of questions (page layout, output sizes, outputs, auto-zoom, theme, cursor), writes `clips.config.mjs`, runs `doctor` |
+| `/ui-clips:author-clip` | your moment in plain words → `clips/<id>.clip.mjs`: locators read from `inspect`, an `expect` per step, a camera plan; rehearsed with `dry-run`; the framing sheet shown before anything is recorded |
+| `/ui-clips:record-clips` | `dry-run` → `record` → `export`, every output verified against the quality bar, a beats contact sheet, the file list; `--changed` re-records what changed |
+
+The loop is always rehearse → framing sheet → record → export → beats sheet, so framing is judged on a drawing before a recording and on real frames after. `@agent-ui-clips:clip-explorer` is a stub for the next iteration: it inspects an app's routes and drafts a storyboard.
 
 ## Requirements
 
@@ -97,8 +109,9 @@ See [`examples/_template/`](examples/_template/) for an annotated config and cli
 ## CLI
 
 ```
+ui-clips init    [dir]          create a clip project from --url or --serve plus --viewport, --sizes, --outputs, --zoom, --theme, --cursor
 ui-clips doctor                 environment, URL reachability, password gate
-ui-clips inspect <url|clip>     visible text, ARIA snapshot, candidate locators (JSON)
+ui-clips inspect <url|clip>     visible text, ARIA snapshot, candidate locators (JSON); --at <mark> inspects a clip's state at that mark
 ui-clips dry-run [clip|all]     resolve locators, run actions, check expectations; no capture
 ui-clips record  [clip|all]     capture 2× frames (+ action log)
 ui-clips export  [clip|all]     camera, loop, presets, crops, posters, GIF, manifest, snippet
@@ -114,8 +127,7 @@ Playwright's `recordVideo` encodes at CSS-pixel size in realtime, so text goes s
 
 ## Roadmap
 
-- **M3** skills: `new-clip-project`, `author-clip`, `record-clips`
-- **M4** docs, evals, v0.1.0
+- **M4** docs (designers, developers), evals on `examples/todo-demo`, v0.1.0
 
 ## License
 

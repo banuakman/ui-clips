@@ -1,6 +1,15 @@
 # Changelog
 
-## Unreleased (milestone 2, pass D: anchor rule, rehearsal report, framing sheet)
+## Unreleased (milestone 3: skills)
+
+- Skills: `new-clip-project` (one-round interview → `ui-clips init` → `doctor`), `author-clip` (scenario agreed first; locators from `inspect`, never guessed; an `expect` per step; camera plan; `dry-run` until clean; `sheet --framing` shown before recording) with reference files for the clip format, locators and the camera, and `record-clips` (`dry-run` → `record` → `export` → every check verified → `sheet --beats --size card` → file list)
+- `agents/clip-explorer.md`: next-iteration stub that inspects an app's routes and drafts a storyboard
+- `ui-clips init [dir]`: scaffolds `clips.config.mjs` (every key annotated) and `clips/` from `--url` or `--serve` plus `--viewport`, `--sizes`, `--outputs`, `--zoom`, `--theme`, `--cursor`, `--cursor-color`, `--stage-exclude`, `--dsf`; the capture scale drops to 1.5× when 2× frames would exceed ~10 MP
+- `ui-clips inspect <clip> --at <mark>`: a dry run that stops at a mark and inspects the page in that state (a drawer's contents, a dialog)
+- Pilot lesson folded into the skills: the viewport is chosen for the moment (the narrowest width where nothing wraps; tall enough to hold what the camera pans over), a top-anchored cover opening for portrait cards, and the camera pans instead of scrolling
+- `plugin.json` version 0.1.0-m3
+
+## Milestone 2, pass D: anchor rule, rehearsal report, framing sheet
 
 - Focus shots are `{ anchor, extras, padding }`: the window follows the anchor; extras widen it only while visible; a target leaving the viewport never re-solves or re-centres the window; an anchor off-stage when the shot starts hugs the edge it will enter from and the window follows it in. Legacy `{ focus: [targets] }` maps to anchor + extras
 - Focus frames are placed by their anchor: a short anchor such as a heading sits at the top of the frame so the section below it is what the viewer sees, a tall anchor is centred (`align: "top" | "center"` overrides); the size never shrinks within a shot

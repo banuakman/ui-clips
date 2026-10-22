@@ -1,13 +1,14 @@
 #!/usr/bin/env node
-// ui-clips CLI: doctor | inspect | dry-run | record | export | list
+// ui-clips CLI: init | doctor | inspect | dry-run | record | export | sheet | list
 import { parseArgs } from "node:util";
 import { existsSync, readFileSync, statSync } from "node:fs";
 import path from "node:path";
 
 const USAGE = `ui-clips <command> [args] [--project <dir>] [--json]
 
+  init     [dir]            create a clip project (clips.config.mjs + clips/) from --url or --serve and the options below
   doctor                    environment, URL reachability, password gate
-  inspect  <url|clip>       visible text, ARIA snapshot, candidate locators (JSON)
+  inspect  <url|clip>       visible text, ARIA snapshot, candidate locators (JSON); --at <mark> inspects a clip's state at that mark
   dry-run  [clip|all]       resolve locators, run actions, check expectations; no capture
   record   [clip|all]       capture 2x frames (+ action log)
   export   [clip|all]       camera, loop, presets, crops, posters, GIF, manifest, snippet
@@ -19,7 +20,10 @@ Options: --project <dir>  --json  --changed
                  --fast (faster VP9, no GIF, camera at export width)
          sheet:  --beats (one frame per mark)  --size <name> (from that output size)
                  --framing (from the dry run: each beat's stage frame with the planned camera window beside the card crop)
-         doctor: --no-url`;
+         doctor: --no-url
+         init:   --url <https://…> | --serve <dir>  --viewport 1440x900|desktop|wide  --sizes full,card,landscape[,name=WxH[@2]|name=16:9]
+                 --theme light|dark|auto  --cursor arrow|dot|none  --cursor-color #hex  --outputs mp4,webm,poster[,gif]
+                 --zoom gentle|pronounced|off  --feel brisk|calm|lazy  --stage-exclude "aside,nav.sidebar"  --dsf 2|1.5  --force`;
 
 const { values: opts, positionals } = parseArgs({
   allowPositionals: true,
@@ -34,6 +38,18 @@ const { values: opts, positionals } = parseArgs({
     size: { type: "string" },
     framing: { type: "boolean", default: false },
     "no-url": { type: "boolean", default: false },
+    at: { type: "string" },
+    url: { type: "string" },
+    serve: { type: "string" },
+    viewport: { type: "string" },
+    sizes: { type: "string" },
+    theme: { type: "string" },
+    cursor: { type: "string" },
+    "cursor-color": { type: "string" },
+    outputs: { type: "string" },
+    "stage-exclude": { type: "string" },
+    dsf: { type: "string" },
+    force: { type: "boolean", default: false },
     help: { type: "boolean", short: "h", default: false },
   },
 });
@@ -80,8 +96,24 @@ const fmtRehearsal = (r) => (r.rehearsal ? "\n" + formatRehearsal(r.rehearsal) :
 const fmtResult = (r) => r.skipped ? `· ${r.clipId}: ${r.skipped}` : r.error ? `✗ ${r.clipId}: ${r.error.kind}${r.error.step ? ` at step "${r.error.step}"` : ""}: ${r.error.message}` : (r.ok ? "✓" : "⚠") + ` ${r.clipId}: ${r.mode === "record" ? `${r.frames} frames (${r.frameSize?.width}×${r.frameSize?.height})` : `${r.actions} actions`} in ${(r.durationMs / 1000).toFixed(2)} s${r.warnings?.length ? "\n  ⚠ " + r.warnings.join("\n  ⚠ ") : ""}`
   + fmtRehearsal(r);
 
+const list = (s) => (s ? String(s).split(",").map((x) => x.trim()).filter(Boolean) : []);
+
 try {
   switch (command) {
+    case "init": {
+      const { scaffoldProject, parseViewport } = await import("./scaffold.mjs");
+      const dir = path.resolve(arg || "clips-project");
+      let r;
+      try { r = scaffoldProject(dir, {
+        url: opts.url, serve: opts.serve ? path.relative(dir, path.resolve(opts.serve)) || "." : undefined,
+        viewport: parseViewport(opts.viewport), deviceScaleFactor: opts.dsf ? +opts.dsf : undefined,
+        sizes: list(opts.sizes), theme: opts.theme, cursor: opts.cursor, cursorColor: opts["cursor-color"],
+        outputs: list(opts.outputs), zoom: opts.zoom, feel: opts.feel, stageExclude: list(opts["stage-exclude"]),
+        passwordEnv: !!process.env.UI_CLIPS_PASSWORD,
+      }, { force: opts.force }); } catch (e) { fail(e.message); }
+      emit({ ok: true, ...r }, `✓ ${r.configFile}\n✓ ${r.clipsDir}/ (empty)\nNext: ui-clips doctor --project ${JSON.stringify(dir)}, then author a clip into clips/<id>.clip.mjs.`);
+      break;
+    }
     case "doctor": {
       const { doctor } = await import("./doctor.mjs");
       let config = null;
@@ -99,8 +131,19 @@ try {
       if (!/^https?:\/\//.test(arg) && !arg.startsWith("/")) {
         const clips = await loadClips(config, "all");
         const clip = clips.find((c) => c.id === arg);
-        if (clip) start = clip.start; else fail(`"${arg}" is neither a URL, a path, nor a known clip id`);
+        if (!clip) fail(`"${arg}" is neither a URL, a path, nor a known clip id`);
+        if (opts.at) {
+          // The state the clip's steps reach at a mark (a drawer's contents, a dialog): a dry run that stops there.
+          const { runClip } = await import("./run.mjs");
+          const r = await withBrowser(config, ({ browser, baseUrl }) => runClip({ browser, baseUrl, config, clip, mode: "dry", stopAt: opts.at, log }));
+          if (r.error) fail(`${clip.id}: ${r.error.kind}${r.error.step ? ` at step "${r.error.step}"` : ""}: ${r.error.message}`);
+          if (!r.inspect) fail(`${clip.id}: mark "${opts.at}" was never reached (marks are named in h.mark calls)`);
+          process.stdout.write(JSON.stringify({ stoppedAt: r.stoppedAt, ...r.inspect }, null, 2) + "\n");
+          break;
+        }
+        start = clip.start;
       }
+      if (opts.at) fail("--at needs a clip id, not a URL");
       const r = await withBrowser(config, async ({ browser, baseUrl }) => {
         const context = await openContext(browser, config, { cursor: false });
         const page = await context.newPage();

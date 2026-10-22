@@ -2,7 +2,7 @@
 import path from "node:path";
 import { openContext, gotoStart } from "./browser.mjs";
 import { createHelpers, ExpectError, StepError } from "./helpers.mjs";
-import { DryTake, RecordTake } from "./capture.mjs";
+import { DryTake, RecordTake, StopAtMark } from "./capture.mjs";
 import { rmSync, writeFileSync } from "node:fs";
 import { buildRehearsal } from "./rehearsal.mjs";
 
@@ -13,7 +13,7 @@ export function takeDirFor(config, clip, takeId = "latest") {
 /**
  * @returns {{ok:boolean, clipId:string, mode:string, durationMs:number, take?:object, error?:{step:string,message:string}}}
  */
-export async function runClip({ browser, baseUrl, config, clip, mode = "dry", takeId = "latest", log = () => {} }) {
+export async function runClip({ browser, baseUrl, config, clip, mode = "dry", takeId = "latest", stopAt = null, log = () => {} }) {
   const record = mode === "record";
   if (clip.isSubclip) return { ok: true, clipId: clip.id, mode, durationMs: 0, warnings: [], skipped: `sub-clip of ${clip.take}; nothing to ${record ? "record" : "rehearse"}` };
   const context = await openContext(browser, config, { cursor: record });
@@ -30,7 +30,7 @@ export async function runClip({ browser, baseUrl, config, clip, mode = "dry", ta
     if (!record) rmSync(rehearsalDir, { recursive: true, force: true });
     take = record
       ? new RecordTake({ clip, config, page, takeDir: takeDirFor(config, clip, takeId) })
-      : new DryTake({ clip, config, page, rehearsalDir });
+      : new DryTake({ clip, config, page, rehearsalDir, stopAt });
     const runConfig = { ...config, crops: { ...(config.crops || {}), ...(config.sizes || {}), ...(clip.crops || {}) } };
     const h = createHelpers({ page, config: runConfig, take, fast: !record });
     // Stage exclusions (§10.3): measure selectors once the page is ready; rects pass through.
@@ -86,7 +86,11 @@ export async function runClip({ browser, baseUrl, config, clip, mode = "dry", ta
       }
     }
   } catch (e) {
-    if (e instanceof ExpectError || e instanceof StepError) {
+    if (e instanceof StopAtMark) {
+      // inspect --at <mark>: the page in the state the steps reach at that mark
+      const { inspectPage } = await import("./inspect.mjs");
+      result.ok = true; result.stoppedAt = e.mark; result.inspect = await inspectPage(page);
+    } else if (e instanceof ExpectError || e instanceof StepError) {
       result.error = { kind: e.name, step: e.step, message: e.cause?.message || e.message };
     } else {
       result.error = { kind: e.name || "Error", step: null, message: e.message };

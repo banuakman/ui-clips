@@ -4,9 +4,15 @@ import { writeFile } from "node:fs/promises";
 import path from "node:path";
 
 /** A dry take logs actions and marks but captures nothing. */
+/** Thrown by a dry run when it reaches the mark it was asked to stop at (inspect --at). */
+export class StopAtMark extends Error {
+  constructor(mark) { super(`stopped at mark "${mark}"`); this.name = "StopAtMark"; this.mark = mark; }
+}
+
 export class DryTake {
-  constructor({ clip, config, page = null, rehearsalDir = null }) {
+  constructor({ clip, config, page = null, rehearsalDir = null, stopAt = null }) {
     this.clip = clip;
+    this.stopAt = stopAt;     // mark name at which a dry run stops so the page can be inspected in that state
     this.config = config;
     this.page = page;
     this.rehearsalDir = rehearsalDir;
@@ -32,6 +38,7 @@ export class DryTake {
   log(entry) { this.actions.push({ t: this.t(), ...entry }); }
   mark(name, { box, boxesNow } = {}) {
     this.marks.push({ name, t: this.t(), ...(box ? { box } : {}), ...(boxesNow ? { boxesNow } : {}), seq: this.markSeq() });
+    if (this.stopAt && name === this.stopAt) throw new StopAtMark(name);
     if (name === this.poster.mode && !this.poster.taken) this.poster.pending = true;
     this.pendingMarks.push(name);
   }
