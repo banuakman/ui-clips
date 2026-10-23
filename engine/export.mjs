@@ -3,7 +3,7 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync, statSync, rmSync, readdirSync } from "node:fs";
 import { spawn, execFileSync } from "node:child_process";
 import path from "node:path";
-import { retime, frameAt } from "./retime.mjs";
+import { retime, frameAt, concatText } from "./retime.mjs";
 import { buildTakeTimeMap } from "./timemap.mjs";
 import { stageRect, stageFilter, toStage, maskCmdText } from "./stage.mjs";
 import { buildTrack, atRest, sendcmdText, windowAt, settledWindowAt, frameGeometry, frameAround, padBox, FEEL } from "./camera.mjs";
@@ -24,6 +24,15 @@ export function run(bin, args, { cwd } = {}) {
   });
 }
 const ff = (args, opts) => run(ffmpegBin(), ["-y", "-hide_banner", "-loglevel", "error", ...args], opts);
+
+/**
+ * ffmpeg args that encode a frames.txt concat list (one entry per output frame) so that intermediate frame k is entry k.
+ * The pts come from the frame index: the list's rounded durations (0.033333 s) drift off k/fps and the cfr pass then
+ * duplicates or drops frames, putting the video a frame behind the camera track.
+ */
+export function intermediateArgs({ list = "frames.txt", fps, frames, out }) {
+  return ["-f", "concat", "-safe", "0", "-i", list, "-vf", `setpts=N/(${fps}*TB)`, "-fps_mode", "cfr", "-r", String(fps), "-frames:v", String(frames), "-pix_fmt", "yuv444p", ...lossless, out];
+}
 
 export async function probe(file) {
   const { out } = await run(ffprobeBin(), ["-v", "error", "-select_streams", "v:0", "-count_frames", "-show_entries",
@@ -152,11 +161,10 @@ export async function exportClip({ config, clip, takeDir, outDir, log = () => {}
   const nFull = Math.max(1, Math.round((fullMs * fps) / 1000));
   const cfr = [];
   for (let k = 0; k < nFull; k++) cfr.push(entries[frameAt(entries, tm.toSource((k * 1000) / fps))].file);
-  const d = (1 / fps).toFixed(6);
-  writeFileSync(path.join(takeDir, "frames.txt"), cfr.map((f) => `file '${f}'\nduration ${d}`).join("\n") + `\nfile '${cfr[cfr.length - 1]}'\n`);
+  writeFileSync(path.join(takeDir, "frames.txt"), concatText(cfr, fps));
   const intermediate = path.join(takeDir, "intermediate.mkv");
   log(`${parent.id}: ${take.frames.length} source frames → ${(fullMs / 1000).toFixed(2)} s at ${fps} fps${tm.trimmedOutMs ? ` (${tm.trimmedOutMs} ms trimmed)` : ""}${tm.segments.length ? ` (speed ramps: ${rawMs} ms → ${fullMs} ms)` : ""}`);
-  await ff(["-f", "concat", "-safe", "0", "-i", "frames.txt", "-fps_mode", "cfr", "-r", String(fps), "-frames:v", String(nFull), "-pix_fmt", "yuv444p", ...lossless, intermediate], { cwd: takeDir });
+  await ff(intermediateArgs({ fps, frames: nFull, out: intermediate }), { cwd: takeDir });
   result.sourceFrames = take.frames.length; result.droppedFrames = dropped;
 
   // 2. Stage, and the take's events in output time and stage coordinates.
