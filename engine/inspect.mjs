@@ -34,7 +34,7 @@ export async function inspectPage(page) {
     const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_ELEMENT);
     let el;
     while ((el = walker.nextNode())) {
-      if (el.id === "__uiclips_cursor" || el.closest("#__uiclips_cursor")) continue;
+      if (el.id === "ui-clips-cursor" || el.closest("#ui-clips-cursor")) continue;
       if (["SCRIPT", "STYLE", "NOSCRIPT", "SVG", "PATH"].includes(el.tagName)) continue;
       const own = [...el.childNodes].filter((n) => n.nodeType === 3).map((n) => n.textContent).join(" ").replace(/\s+/g, " ").trim();
       const isInput = ["INPUT", "TEXTAREA", "SELECT"].includes(el.tagName);

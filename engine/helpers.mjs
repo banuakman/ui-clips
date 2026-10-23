@@ -51,8 +51,8 @@ export function createHelpers({ page, config, take, fast = false }) {
     await take.beatShot(name);
   }
 
-  async function cursorHide() { await page.evaluate(() => window.__uiclips?.hide()).catch(() => {}); }
-  async function cursorShow() { await page.evaluate(() => window.__uiclips?.show()).catch(() => {}); }
+  async function cursorHide() { await page.evaluate(() => window["ui-clips"]?.hide()).catch(() => {}); }
+  async function cursorShow() { await page.evaluate(() => window["ui-clips"]?.show()).catch(() => {}); }
 
   /** A target's box right now, without waiting: null when it does not exist yet. */
   async function quickBox(target) {
@@ -331,7 +331,7 @@ export function createHelpers({ page, config, take, fast = false }) {
         const until = (p) => Promise.race([p, new Promise((r) => setTimeout(r, timeout))]);
         // The injected cursor's own click animations must not count as page motion, nor animations that loop forever
         // (a ticker or spinner never finishes, so waiting on it would always run out the timeout).
-        const cursor = document.getElementById("__uiclips_cursor");
+        const cursor = document.getElementById("ui-clips-cursor");
         const page = document.getAnimations().filter((a) => !(cursor && a.effect?.target && cursor.contains(a.effect.target)) && a.effect?.getTiming?.().iterations !== Infinity);
         await until(Promise.all(page.map((a) => a.finished.catch(() => {}))));
         await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));

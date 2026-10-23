@@ -56,7 +56,7 @@ export async function openContext(browser, config, { cursor = true } = {}) {
     if (window.top !== window) return;
     const add = () => {
       if (!document.head) return requestAnimationFrame(add);
-      const s = document.createElement("style"); s.id = "__uiclips_css"; s.textContent = ${css};
+      const s = document.createElement("style"); s.id = "ui-clips-css"; s.textContent = ${css};
       document.head.appendChild(s);
     };
     add();

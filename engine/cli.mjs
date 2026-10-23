@@ -111,7 +111,7 @@ try {
         outputs: list(opts.outputs), zoom: opts.zoom, feel: opts.feel, stageExclude: list(opts["stage-exclude"]),
         passwordEnv: !!process.env.UI_CLIPS_PASSWORD,
       }, { force: opts.force }); } catch (e) { fail(e.message); }
-      emit({ ok: true, ...r }, `✓ ${r.configFile}\n✓ ${r.clipsDir}/ (empty)\nNext: ui-clips doctor --project ${JSON.stringify(dir)}, then author a clip into clips/<id>.clip.mjs.`);
+      emit({ ok: true, ...r }, `✓ ${r.configFile}\n✓ ${r.clipsDir}/ (empty)${r.written.some((f) => f.endsWith("CLAUDE.md")) ? `\n✓ ${path.join(dir, "CLAUDE.md")} (the clip-project working rule)` : ""}\nNext: ui-clips doctor --project ${JSON.stringify(dir)}, then author a clip into clips/<id>.clip.mjs.`);
       break;
     }
     case "doctor": {

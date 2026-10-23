@@ -6,7 +6,7 @@ export default {
   start: "/",
   length: "natural",
   loop: "none",
-  poster: "added",
+  poster: "b5-end",               // the opening framing with the new task ticked: the README still
   steps: async ({ page, h }) => {
     const input = page.getByLabel("Add a task");
     const newRow = page.locator("li", { hasText: "Book the studio" });
