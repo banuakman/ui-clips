@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { buildTakeTimeMap } from "../engine/timemap.mjs";
-import { takeEvents } from "../engine/export.mjs";
+import { takeEvents, normaliseSizes } from "../engine/export.mjs";
 import { FEEL, CAMERA, frameGeometry, frameAround, detectShots, buildExplicit, buildTrack, atRest, sendcmdText, windowAt } from "../engine/camera.mjs";
 
 const stage = { x: 0, y: 0, w: 1440, h: 900, masks: [], cuts: [] };
@@ -254,4 +254,18 @@ test("a shot after an h.trim fires at its take time minus the trimmed length (tx
   assert.equal(wide.startMs, 5775);
   assert.ok(windowAt(track.frames, 5740).w < 1440, "still zoomed just before the cut lands");
   assert.equal(windowAt(track.frames, 5800).w, 1440, "wide right after the cut, not a second later");
+});
+
+test("upscale: a size option lowers the floor by that factor, capped at 2", () => {
+  const g1 = frameGeometry(stage, { aspect: 1, outWidthPx: 1200, deviceScaleFactor: 2 });
+  const g2 = frameGeometry(stage, { aspect: 1, outWidthPx: 1200, deviceScaleFactor: 2, upscale: 1.5 });
+  assert.equal(g1.floorW, 600);
+  assert.equal(g2.floorW, 400);
+  const config = { sizes: { full: true, square: { width: 600, height: 600, scale: 2, upscale: 3 }, card: { width: 480, height: 600, scale: 2 } }, quality: { maxWidth: 1440 } };
+  const sizes = normaliseSizes(config, { crops: {} }, stage);
+  assert.equal(sizes.find((s) => s.name === "square").upscale, 2, "capped at 2");
+  assert.equal(sizes.find((s) => s.name === "card").upscale, 1, "default 1");
+  const g3 = frameGeometry(stage, { aspect: 1, outWidthPx: 1200, deviceScaleFactor: 2, upscale: 2 });
+  const f = focusFrame({ x: 600, y: 300, w: 200, h: 200 }, [], { padding: 24 }, g3, stage);
+  assert.equal(Math.round(f.w), 300, "a frame narrower than the default floor is allowed up to the upscale");
 });

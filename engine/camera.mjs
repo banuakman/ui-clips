@@ -47,10 +47,12 @@ export function padBox(box, stage, { padding = CAMERA.padding, minPadPx = CAMERA
 /**
  * Geometry for one output size: aspect (w/h), the wide frame (stage fitted to the output width, top-aligned) and the
  * floor on window width (never narrower than half the output width in CSS px, i.e. never upscaled from the 2× source).
+ * `upscale` (a size option, default 1, capped at 2) lowers the floor by that factor: the size accepts frames upscaled
+ * up to it, which the floor check reports.
  */
-export function frameGeometry(stage, { aspect, outWidthPx, deviceScaleFactor = 2 }) {
+export function frameGeometry(stage, { aspect, outWidthPx, deviceScaleFactor = 2, upscale = 1 }) {
   const wide = { x: 0, y: 0, w: stage.w, h: stage.w / aspect };
-  const floorW = outWidthPx / deviceScaleFactor;
+  const floorW = outWidthPx / (deviceScaleFactor * upscale);
   const canvasH = Math.max(stage.h, wide.h);
   return { aspect, wide, floorW, canvasH, padBelow: Math.max(0, wide.h - stage.h) };
 }
@@ -327,8 +329,8 @@ export function settledWindowAt(frames, explicitShots, T) {
 /**
  * @returns {{frames:[{t,x,y,w,h,scale}], shots, warnings, geo}}
  */
-export function buildTrack({ actions = [], explicitShots = [], tracks = {}, stage, aspect, outWidthPx, deviceScaleFactor = 2, mode = "gentle", feel = "calm", durationMs, fps }) {
-  const geo = frameGeometry(stage, { aspect, outWidthPx, deviceScaleFactor });
+export function buildTrack({ actions = [], explicitShots = [], tracks = {}, stage, aspect, outWidthPx, deviceScaleFactor = 2, upscale = 1, mode = "gentle", feel = "calm", durationMs, fps }) {
+  const geo = frameGeometry(stage, { aspect, outWidthPx, deviceScaleFactor, upscale });
   const warnings = [];
   const explicit = buildExplicit(explicitShots, { tracks, stage, geo, actions });
   warnings.push(...explicit.warnings);

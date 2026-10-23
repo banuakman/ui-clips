@@ -9,6 +9,7 @@
 - Pilot lesson folded into the skills: the viewport is chosen for the moment (the narrowest width where nothing wraps; tall enough to hold what the camera pans over), a top-anchored cover opening for portrait cards, and the camera pans instead of scrolling
 - `plugin.json` version 0.1.0-m3
 - Export: everything the take logs in take time (camera shots, tracked boxes, marks, clicks, the poster time, the beats sheet, speed-ramp ranges) goes through one take → output time map, trims first and then speed ramps (`buildTakeTimeMap`, `takeEvents`). A camera move after an `h.trim` used to fire late by the trimmed length, so a cut after a page load showed the new page inside the previous framing
+- Sizes: `upscale` per output size (opt-in, default 1, capped at 2) lowers the half-width floor by that factor, so a small widget can fill a square or portrait card from a frame upscaled up to that much; the floor check reports the cap in force
 - Export: the intermediate encode takes each frame's timestamp from its index (`setpts=N/(fps*TB)`), so intermediate frame k is frames.txt entry k. The list's rounded 0.033333 s durations drifted and the cfr pass duplicated a frame, putting the video a frame behind the camera track (a one-frame flash of the old page at a hard cut)
 
 ## Milestone 2, pass D: anchor rule, rehearsal report, framing sheet

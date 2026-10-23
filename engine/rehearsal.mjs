@@ -22,7 +22,7 @@ export function buildRehearsal({ config, clip, take }) {
   const notes = [];
   const perSize = {};
   for (const sz of sizes) {
-    const geo = frameGeometry(stage, { aspect: sz.aspect, outWidthPx: sz.outW, deviceScaleFactor: dsf });
+    const geo = frameGeometry(stage, { aspect: sz.aspect, outWidthPx: sz.outW, deviceScaleFactor: dsf, upscale: sz.upscale });
     let opening = null;
     const windows = [];
     shots.forEach((s, i) => {
@@ -70,7 +70,8 @@ export function buildRehearsal({ config, clip, take }) {
       let window = w?.window || null;
       // follow: a focus window moves with its anchor between the shot and this beat (edge-hugging when it started off-stage)
       if (window && shot && shot.kind === "focus" && shot.anchor?.track && m.boxesNow) {
-        const geo = frameGeometry(stage, { aspect: sizes.find((z) => z.name === name).aspect, outWidthPx: info.outW, deviceScaleFactor: dsf });
+        const sz = sizes.find((z) => z.name === name);
+        const geo = frameGeometry(stage, { aspect: sz.aspect, outWidthPx: info.outW, deviceScaleFactor: dsf, upscale: sz.upscale });
         const atMark = m.boxesNow[shot.anchor.track] ? clipToStage(toStage(m.boxesNow[shot.anchor.track], stage), stage) : null;
         if (atMark) {
           const extras = (shot.extras || []).map((e) => e.track && m.boxesNow[e.track] ? clipToStage(toStage(m.boxesNow[e.track], stage), stage) : null).filter(Boolean);

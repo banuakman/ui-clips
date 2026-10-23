@@ -88,7 +88,9 @@ export function normaliseSizes(config, clip, stage) {
     aspect = cssW / cssH;
     const scale = s.scale || (s.aspect && !s.width ? W / cssW : 1);
     const focus = s.focus ?? "auto";
-    out.push({ name, aspect, outW: even(Math.round(cssW * scale)), outH: even(Math.round(cssH * scale)), scale, explicitScale: !!s.scale, cssW, cssH, mode: focus === "auto" ? "camera" : "static", focus });
+    // upscale: opt-in, capped at 2 (beyond that a 2× source renders at or below 1 CSS px per output px and text goes soft)
+    const upscale = Math.min(2, Math.max(1, Number(s.upscale) || 1));
+    out.push({ name, aspect, outW: even(Math.round(cssW * scale)), outH: even(Math.round(cssH * scale)), scale, explicitScale: !!s.scale, upscale, cssW, cssH, mode: focus === "auto" ? "camera" : "static", focus });
   }
   return out;
 }
@@ -192,9 +194,9 @@ export async function exportClip({ config, clip, takeDir, outDir, log = () => {}
     const info = { name: sz.name, outW: sz.outW, outH: sz.outH, scale: sz.scale, explicitScale: sz.explicitScale, mode: sz.mode };
     const renderW = sz.full ? (fast ? W : Math.min(W * dsf, even(stage.w * dsf))) : sz.outW;
     const renderH = even(Math.round(renderW / sz.aspect));
-    let frames = null, geo = frameGeometry(stage, { aspect: sz.aspect, outWidthPx: sz.outW, deviceScaleFactor: dsf }), padBelow = geo.padBelow, staticWin = null;
+    let frames = null, geo = frameGeometry(stage, { aspect: sz.aspect, outWidthPx: sz.outW, deviceScaleFactor: dsf, upscale: sz.upscale }), padBelow = geo.padBelow, staticWin = null;
     if (sz.mode === "camera") {
-      const track = buildTrack({ actions, explicitShots, tracks, stage, aspect: sz.aspect, outWidthPx: sz.outW, deviceScaleFactor: dsf, mode, feel: feelName, durationMs: fullMs, fps });
+      const track = buildTrack({ actions, explicitShots, tracks, stage, aspect: sz.aspect, outWidthPx: sz.outW, deviceScaleFactor: dsf, upscale: sz.upscale, mode, feel: feelName, durationMs: fullMs, fps });
       geo = track.geo;
       frames = track.frames.slice(fa, fb).map((f) => ({ ...f, t: f.t - track.frames[fa].t }));
       for (const w of track.warnings) if (!result.warnings.includes(w)) result.warnings.push(w);
@@ -263,7 +265,7 @@ export async function exportClip({ config, clip, takeDir, outDir, log = () => {}
         check(`loop camera rest (${sz.name})`, ok, ok ? `at the opening framing for the last ${need} ms (0.4 s rest + 0.4 s fade)` : `the camera is still moving inside the last ${need} ms; end the track with h.shot("opening") then hold 0.4 s before the fade`);
       }
       const minW = Math.min(...frames.map((f) => f.w));
-      check(`camera floor (${sz.name})`, minW >= geo.floorW - 0.5, `narrowest window ${Math.round(minW)} CSS px, floor ${Math.round(geo.floorW)} (half of ${sz.outW} px)`);
+      check(`camera floor (${sz.name})`, minW >= geo.floorW - 0.5, `narrowest window ${Math.round(minW)} CSS px, floor ${Math.round(geo.floorW)} (half of ${sz.outW} px${sz.upscale > 1 ? `, upscale up to ${sz.upscale}×` : ""})`);
     }
     result.sizes[sz.name] = info;
   }
