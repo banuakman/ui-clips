@@ -40,7 +40,7 @@ export function cursorInitScript(cursor) {
 
   return `(() => {
     if (window.top !== window) return;
-    const ID = "__uiclips_cursor";
+    const ID = "ui-clips-cursor";
     const COLOR = ${JSON.stringify(color)};
     const state = { x: -100, y: -100, visible: false, el: null, inner: null };
     function ensure() {
@@ -90,7 +90,7 @@ export function cursorInitScript(cursor) {
     }
     window.addEventListener("mousemove", (e) => place(e.clientX, e.clientY), true);
     window.addEventListener("mousedown", (e) => { place(e.clientX, e.clientY); click(); }, true);
-    window.__uiclips = {
+    window["ui-clips"] = {
       hide() { const el = ensure(); if (el) { el.style.opacity = "0"; } state.visible = false; },
       show() { const el = ensure(); if (el) { el.style.opacity = "1"; } state.visible = true; },
       place, click,

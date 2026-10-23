@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { mkdtempSync, existsSync, rmSync } from "node:fs";
+import { mkdtempSync, existsSync, rmSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { parseViewport, parseSize, captureScale, renderConfig, scaffoldProject } from "../engine/scaffold.mjs";
@@ -39,6 +39,8 @@ test("a scaffolded project loads with the answers applied", async () => {
     assert.equal(c.zoom.mode, "off");
     assert.ok(c.sizes.full === true && c.sizes.card.width === 480); // full is always present
     assert.deepEqual(c.stage.exclude, ["aside"]);
+    assert.ok(existsSync(path.join(dir, "CLAUDE.md")), "init writes the clip-project CLAUDE.md");
+    assert.match(readFileSync(path.join(dir, "CLAUDE.md"), "utf8"), /never edits the plugin/);
     assert.throws(() => scaffoldProject(dir, { url: "https://example.test" }), /exists/);
   } finally { rmSync(dir, { recursive: true, force: true }); }
 });

@@ -98,8 +98,39 @@ export function renderConfig(a = {}) {
   return lines.join("\n");
 }
 
+/** The working rule every clip project carries (spec §14): this folder makes clips and never edits the plugin. */
+export function renderClaudeMd() {
+  return `# This folder is a ui-clips clip project
+
+It holds \`clips.config.mjs\`, one \`clips/<id>.clip.mjs\` per clip, the takes in \`.cache/\` and the exports in \`out/\`.
+Work here with the ui-clips skills: \`/ui-clips:author-clip\` to turn a moment described in plain words into a clip file,
+\`/ui-clips:record-clips\` to rehearse, record, export and verify it. The \`ui-clips\` command (\`doctor\`, \`inspect\`,
+\`dry-run\`, \`sheet\`, \`record\`, \`export\`, \`list\`) is on PATH while the plugin is installed.
+
+## Working rule
+
+**This project makes clips and never edits the plugin.** The ui-clips engine and skills live in the plugin's own
+repository; a session working here does not patch them, not even to get a clip out.
+
+When a clip hits a plugin problem (a check that fails for the wrong reason, a camera move that cannot be expressed,
+a helper that misbehaves):
+
+1. Ship the best clip the current plugin can make.
+2. File the problem as \`docs/issues/<date>-<name>.md\` in this project, with: what was asked, what happened, how to
+   reproduce it (the clip file and the command), what was measured (frame sizes, timings, the check's message), the
+   suspected file and function, a proposed fix with a test, whether it is a bug or an enhancement, and whether the
+   clip can ship without it.
+3. Report it upstream as an issue on the plugin's repository, linking or pasting that file.
+
+The UI being recorded is never changed for a clip either: copy, colours, spacing and transitions are what the design
+says. The one exception is a layout fix that makes the real UI filmable, applied as a \`cssOverrides\` line with the
+owner's approval and a comment saying why, and removed once the source is fixed.
+`;
+}
+
 /**
- * Create the project: <dir>/clips.config.mjs, <dir>/clips/, <dir>/.gitignore. Refuses to overwrite a config unless force.
+ * Create the project: <dir>/clips.config.mjs, <dir>/clips/, <dir>/CLAUDE.md, <dir>/.gitignore. Refuses to overwrite
+ * a config unless force; never overwrites an existing CLAUDE.md or .gitignore.
  */
 export function scaffoldProject(dir, answers = {}, { force = false } = {}) {
   const configFile = path.join(dir, CONFIG_FILE);
@@ -111,5 +142,7 @@ export function scaffoldProject(dir, answers = {}, { force = false } = {}) {
   written.push(configFile);
   const gi = path.join(dir, ".gitignore");
   if (!existsSync(gi)) { writeFileSync(gi, ".cache/\nout/\n"); written.push(gi); }
+  const cm = path.join(dir, "CLAUDE.md");
+  if (!existsSync(cm)) { writeFileSync(cm, renderClaudeMd()); written.push(cm); }
   return { dir, configFile, clipsDir: path.join(dir, "clips"), written, viewport: answers.viewport || LAYOUTS.desktop };
 }
