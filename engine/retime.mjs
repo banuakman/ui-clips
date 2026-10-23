@@ -1,5 +1,6 @@
 // Rebuild a constant-frame-rate timeline from damage-driven screencast frames.
 // Frames hold until the next frame; trims cut time out; the last frame holds to tEnd.
+import { normaliseTrims } from "./timemap.mjs";
 
 /**
  * @param {{frames:{file:string,ts:number}[], t0:number, tEnd:number, trims?:[number,number][]}} take
@@ -14,7 +15,7 @@ export function retime({ frames, t0, tEnd, trims = [] }) {
   if (kept.length === 0) return { entries: [], durationMs: 0, dropped };
   // The first frame covers the timeline from 0 even if it was presented slightly before or after t0.
   kept[0].rel = Math.min(kept[0].rel, 0);
-  const cuts = trims.map(([a, b]) => [Math.max(0, a), Math.min(total, b)]).filter(([a, b]) => b > a).sort((x, y) => x[0] - y[0]);
+  const cuts = normaliseTrims(trims, total);
   const entries = [];
   let cursor = 0;
   for (let i = 0; i < kept.length; i++) {

@@ -4,7 +4,7 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync, statSync, rmSync, r
 import { spawn, execFileSync } from "node:child_process";
 import path from "node:path";
 import { retime, frameAt } from "./retime.mjs";
-import { buildTimeMap } from "./timemap.mjs";
+import { buildTakeTimeMap } from "./timemap.mjs";
 import { stageRect, stageFilter, toStage, maskCmdText } from "./stage.mjs";
 import { buildTrack, atRest, sendcmdText, windowAt, settledWindowAt, frameGeometry, frameAround, padBox, FEEL } from "./camera.mjs";
 import { decideReturn, crossfadeFilter, LOOP } from "./loop.mjs";
@@ -92,6 +92,22 @@ function resolveFocus(take, cropName, focus, stage) {
   return last ? { box: toStage(last.box, stage), at: `selector at ${last.at}`, t: last.t } : null;
 }
 
+/**
+ * The take's events in output time and stage coordinates. Everything the take logs is in take time, so each time goes
+ * through tm.toOutput (trims, then speed ramps), the same map the frames were retimed with.
+ */
+export function takeEvents(take, stage, tm) {
+  const O = (t) => tm.toOutput(t);
+  const tgStage = (tg) => (tg && tg.box ? { ...tg, box: toStage(tg.box, stage) } : tg);
+  return {
+    marks: (take.marks || []).map((m) => ({ ...m, t: O(m.t) })),
+    actions: (take.actions || []).map((a) => ({ ...a, t: O(a.t), ...toStage(a, stage) })),
+    explicitShots: (take.shots || []).map((s) => ({ ...s, t: O(s.t), targets: (s.targets || []).map(tgStage), anchor: s.kind === "focus" ? tgStage(s.anchor) : s.anchor, extras: (s.extras || []).map(tgStage), anchorBox: s.anchorBox ? toStage(s.anchorBox, stage) : undefined })),
+    tracks: Object.fromEntries(Object.entries(take.tracks || {}).map(([k, v]) => [k, v.map(([t, x, y, w, h]) => [O(t), x - stage.x, y - stage.y, w, h])])),
+    posterAt: take.poster?.at != null ? O(take.poster.at) : null,
+  };
+}
+
 /** Resolve a sub-clip boundary ("start" | "end" | mark | ms) to output time. */
 function boundary(v, marks, durationMs) {
   if (v == null || v === "start") return 0;
@@ -128,10 +144,10 @@ export async function exportClip({ config, clip, takeDir, outDir, log = () => {}
   const workDir = path.join(takeDir, clip.isSubclip ? `sub-${clip.id}` : "export");
   mkdirSync(workDir, { recursive: true });
 
-  // 1. Retime in source time, map through speed ramps, sample at constant fps in output time.
+  // 1. Retime in source time (trims cut out), map through speed ramps, sample at constant fps in output time.
   const { entries, durationMs: rawMs, dropped } = retime({ frames: take.frames, t0: take.t0, tEnd: take.tEnd, trims: take.trims });
   if (!entries.length) throw new Error("The take has no frames.");
-  const tm = buildTimeMap(take.speeds || [], rawMs);
+  const tm = buildTakeTimeMap(take, rawMs);
   const fullMs = Math.round(tm.outputDurationMs);
   const nFull = Math.max(1, Math.round((fullMs * fps) / 1000));
   const cfr = [];
@@ -139,20 +155,15 @@ export async function exportClip({ config, clip, takeDir, outDir, log = () => {}
   const d = (1 / fps).toFixed(6);
   writeFileSync(path.join(takeDir, "frames.txt"), cfr.map((f) => `file '${f}'\nduration ${d}`).join("\n") + `\nfile '${cfr[cfr.length - 1]}'\n`);
   const intermediate = path.join(takeDir, "intermediate.mkv");
-  log(`${parent.id}: ${take.frames.length} source frames → ${(fullMs / 1000).toFixed(2)} s at ${fps} fps${tm.identity ? "" : ` (speed ramps: ${rawMs} ms → ${fullMs} ms)`}`);
+  log(`${parent.id}: ${take.frames.length} source frames → ${(fullMs / 1000).toFixed(2)} s at ${fps} fps${tm.trimmedOutMs ? ` (${tm.trimmedOutMs} ms trimmed)` : ""}${tm.segments.length ? ` (speed ramps: ${rawMs} ms → ${fullMs} ms)` : ""}`);
   await ff(["-f", "concat", "-safe", "0", "-i", "frames.txt", "-fps_mode", "cfr", "-r", String(fps), "-frames:v", String(nFull), "-pix_fmt", "yuv444p", ...lossless, intermediate], { cwd: takeDir });
   result.sourceFrames = take.frames.length; result.droppedFrames = dropped;
 
   // 2. Stage, and the take's events in output time and stage coordinates.
   const stage = stageRect(viewport, take.stage?.exclude || []);
   const fill = take.stage?.fill || config.stage?.fill || "#FFFFFF";
-  const O = (t) => tm.toOutput(t);
-  const marks = (take.marks || []).map((m) => ({ ...m, t: O(m.t) }));
-  const actions = (take.actions || []).map((a) => ({ ...a, t: O(a.t), ...toStage(a, stage) }));
-  const tgStage = (tg) => (tg && tg.box ? { ...tg, box: toStage(tg.box, stage) } : tg);
-  const explicitShots = (take.shots || []).map((s) => ({ ...s, t: O(s.t), targets: (s.targets || []).map(tgStage), anchor: s.kind === "focus" ? tgStage(s.anchor) : s.anchor, extras: (s.extras || []).map(tgStage), anchorBox: s.anchorBox ? toStage(s.anchorBox, stage) : undefined }));
-  const tracks = Object.fromEntries(Object.entries(take.tracks || {}).map(([k, v]) => [k, v.map(([t, x, y, w, h]) => [O(t), x - stage.x, y - stage.y, w, h])]));
-  const posterAtFull = take.poster?.at != null ? O(take.poster.at) : fullMs;
+  const { marks, actions, explicitShots, tracks, posterAt } = takeEvents(take, stage, tm);
+  const posterAtFull = posterAt ?? fullMs;
 
   // Sub-clip range in output time → frame indices.
   let T0 = 0, T1 = fullMs;

@@ -1,6 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { buildTimeMap } from "../engine/timemap.mjs";
+import { buildTimeMap, buildTakeTimeMap, trimMap, normaliseTrims } from "../engine/timemap.mjs";
+import { retime } from "../engine/retime.mjs";
 import { stageRect, stageFilter } from "../engine/stage.mjs";
 
 test("time map compresses sped-up stretches and inverts exactly", () => {
@@ -12,6 +13,36 @@ test("time map compresses sped-up stretches and inverts exactly", () => {
   assert.equal(m.toOutput(8000), 6000);
   for (const t of [0, 1999, 2000, 2500, 4999, 5000, 7000]) assert.ok(Math.abs(m.toSource(m.toOutput(t)) - t) < 1e-9, `round trip ${t}`);
   assert.ok(buildTimeMap([], 1000).identity);
+});
+
+test("trim map: a time inside a trim lands on its start, a time after moves back by its length", () => {
+  const cut = trimMap([[5584, 6579]]);
+  assert.equal(cut(1000), 1000);
+  assert.equal(cut(5584), 5584);
+  assert.equal(cut(6000), 5584);
+  assert.equal(cut(6579), 5584);
+  assert.equal(cut(6770), 5775, "the tx-home wide shot");
+  const two = trimMap([[3000, 2000 + 2000], [1000, 1500]]);   // unsorted
+  assert.equal(two(1200), 1000);
+  assert.equal(two(2000), 1500);
+  assert.equal(two(5000), 3500);
+  assert.deepEqual(normaliseTrims([[100, 300], [200, 400], [-50, 20], [900, 800]]), [[0, 20], [100, 400]], "clamped, merged, empty dropped");
+});
+
+test("take time map: trims then speed ramps (whose ranges are take time), consistent with the retimed frames", () => {
+  const take = { trims: [[2000, 3000]], speeds: [{ from: 4000, to: 6000, factor: 2 }], frames: [0, 1000, 2500, 4000].map((r, i) => ({ file: `f${i}`, ts: r })), t0: 0, tEnd: 8000 };
+  const { durationMs } = retime(take);
+  assert.equal(durationMs, 7000);
+  const m = buildTakeTimeMap(take, durationMs);
+  assert.equal(m.outputDurationMs, 6000);
+  assert.equal(m.trimmedOutMs, 1000);
+  assert.equal(m.toOutput(1500), 1500);
+  assert.equal(m.toOutput(2500), 2000);
+  assert.equal(m.toOutput(4000), 3000, "the ramp starts where it was logged, after the cut");
+  assert.equal(m.toOutput(6000), 4000);
+  assert.equal(m.toOutput(8000), m.outputDurationMs);
+  assert.equal(m.toSource(3000), 3000, "toSource gives the retimed (post-trim) timeline");
+  assert.ok(!m.identity && buildTakeTimeMap({}, 1000).identity);
 });
 
 test("stage: edge-spanning exclusions are cut, interior ones masked; filter has crop, drawbox and pad", () => {

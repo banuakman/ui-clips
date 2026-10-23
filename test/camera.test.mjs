@@ -1,5 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
+import { buildTakeTimeMap } from "../engine/timemap.mjs";
+import { takeEvents } from "../engine/export.mjs";
 import { FEEL, CAMERA, frameGeometry, frameAround, detectShots, buildExplicit, buildTrack, atRest, sendcmdText, windowAt } from "../engine/camera.mjs";
 
 const stage = { x: 0, y: 0, w: 1440, h: 900, masks: [], cuts: [] };
@@ -229,4 +231,27 @@ test("align top/bottom on a tall anchor: the window is as wide as the anchor and
   assert.equal(bottom.w, 500); assert.equal(bottom.y + bottom.h, 1000);
   const auto = focusFrame(drawer, [], { padding: 24 }, g, st);
   assert.ok(auto.w >= 800, "without an explicit alignment the frame contains the whole anchor");
+});
+
+test("a shot after an h.trim fires at its take time minus the trimmed length (tx-home)", () => {
+  const take = {
+    trims: [[5584, 6579]],
+    shots: [{ t: 0, kind: "focus", targets: [{ box: { x: 600, y: 400, w: 100, h: 40 } }], ms: 0 }, { t: 6770, kind: "wide", ms: 0 }],
+    actions: [click(7200, 1200, 600)],
+    marks: [{ name: "dashboard", t: 6800 }],
+    tracks: { row: [[5000, 0, 100, 300, 40], [6000, 0, 200, 300, 40], [7000, 0, 300, 300, 40]] },
+    poster: { at: 9000 },
+  };
+  const tm = buildTakeTimeMap(take, 10000 - 995);
+  const ev = takeEvents(take, stage, tm);
+  assert.equal(ev.explicitShots[1].t, 6770 - 995);
+  assert.equal(ev.actions[0].t, 7200 - 995);
+  assert.equal(ev.marks[0].t, 6800 - 995);
+  assert.equal(ev.posterAt, 9000 - 995);
+  assert.deepEqual(ev.tracks.row.map((x) => x[0]), [5000, 5584, 6005], "a sample inside the trim lands on its start");
+  const track = buildTrack({ ...ev, stage, aspect: 1.6, outWidthPx: 1440, mode: "gentle", feel: "calm", durationMs: tm.outputDurationMs, fps: 30 });
+  const wide = track.shots.find((x) => x.source === "explicit" && x.kind === "wide");
+  assert.equal(wide.startMs, 5775);
+  assert.ok(windowAt(track.frames, 5740).w < 1440, "still zoomed just before the cut lands");
+  assert.equal(windowAt(track.frames, 5800).w, 1440, "wide right after the cut, not a second later");
 });

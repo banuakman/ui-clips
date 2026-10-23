@@ -3,7 +3,7 @@ import { existsSync, readFileSync, writeFileSync, mkdirSync } from "node:fs";
 import path from "node:path";
 import { run, ffmpegBin, ffprobeBin } from "./export.mjs";
 import { retime } from "./retime.mjs";
-import { buildTimeMap } from "./timemap.mjs";
+import { buildTakeTimeMap } from "./timemap.mjs";
 
 export async function contactSheet({ config, clip, takeDir, outDir, columns = 4, thumbWidth = 480, max = 12, beats = false, size = "full" }) {
   const takeFile = path.join(takeDir, "take.json");
@@ -20,7 +20,7 @@ export async function contactSheet({ config, clip, takeDir, outDir, columns = 4,
   const settle = (T) => { let cur = null; for (const x of shots) { if (x.startMs <= T) cur = x; else break; } return cur && T < cur.startMs + (cur.moveMs || 0) ? cur.startMs + cur.moveMs : T; };
   const fps = take.fps || config.fps;
   const { durationMs: rawMs } = retime({ frames: take.frames, t0: take.t0, tEnd: take.tEnd, trims: take.trims });
-  const tm = buildTimeMap(take.speeds || [], rawMs);
+  const tm = buildTakeTimeMap(take, rawMs);   // take time → output time: trims, then speed ramps
   const durationMs = Math.round(tm.outputDurationMs);
   const O = (t) => tm.toOutput(t);
   const moments = [];

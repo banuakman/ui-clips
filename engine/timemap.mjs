@@ -1,4 +1,5 @@
 // Speed ramps (§10.2): stretches of the take play faster at export. Source time (ms in the take) ↔ output time.
+// Trims (h.trim) cut windows of take time out first; buildTakeTimeMap composes both.
 
 /** @param {{from:number,to:number,factor:number}[]} speeds  source-time ranges */
 export function buildTimeMap(speeds = [], durationMs = Infinity) {
@@ -37,4 +38,31 @@ export function buildTimeMap(speeds = [], durationMs = Infinity) {
   };
   const outputDurationMs = Number.isFinite(durationMs) ? toOutput(durationMs) : Infinity;
   return { segments: bounds, toOutput, toSource, outputDurationMs, identity: bounds.length === 0 };
+}
+
+/** Trim windows clamped to [0, durationMs], sorted and merged where they overlap. */
+export function normaliseTrims(trims = [], durationMs = Infinity) {
+  const cuts = (trims || []).map(([a, b]) => [Math.max(0, a), Math.min(durationMs, b)]).filter(([a, b]) => b > a).sort((x, y) => x[0] - y[0]);
+  const out = [];
+  for (const c of cuts) { const last = out[out.length - 1]; if (last && c[0] <= last[1]) last[1] = Math.max(last[1], c[1]); else out.push([...c]); }
+  return out;
+}
+
+/** Take time → trimmed time: a time inside a trim lands on its start, a time after it moves back by its length. */
+export function trimMap(trims = []) {
+  const cuts = normaliseTrims(trims);
+  return (t) => { let cut = 0; for (const [a, b] of cuts) { if (t <= a) break; cut += Math.min(t, b) - a; } return t - cut; };
+}
+
+/**
+ * Take time → output time for everything the take logs in take time (shots, tracks, marks, actions, poster, speed
+ * ranges): trims first, then speed ramps. toSource maps output time back to trimmed time (the retimed frame timeline).
+ * @param {{trims?:[number,number][], speeds?:{from:number,to:number,factor:number}[]}} take
+ * @param {number} trimmedMs  the retimed (post-trim) duration
+ */
+export function buildTakeTimeMap({ trims = [], speeds = [] } = {}, trimmedMs = Infinity) {
+  const cut = trimMap(trims);
+  const tm = buildTimeMap((speeds || []).map((s) => ({ ...s, from: cut(s.from), to: cut(s.to) })), trimmedMs);
+  const trimmedOut = normaliseTrims(trims).reduce((n, [a, b]) => n + b - a, 0);
+  return { ...tm, toOutput: (t) => tm.toOutput(cut(t)), toTrimmed: cut, trimmedOutMs: trimmedOut, identity: tm.identity && trimmedOut === 0 };
 }
