@@ -39,6 +39,17 @@ export function createHelpers({ page, config, take, fast = false }) {
   const rand = seededRandom(7);
   let stepNo = 0;
   const trackTargets = {};
+  let openBeat = null;      // rehearsal: the beat whose framing-sheet screenshot is due when it ends
+
+  /** Rehearsal: screenshot the open beat at its end (next mark or end of steps), once the page has settled. */
+  async function endBeat() {
+    if (!fast || !openBeat || !take.beatShot) return;
+    const name = openBeat;
+    openBeat = null;
+    await h.waitForMotion({ timeout: 1000 });   // a page with a looping animation (a ticker) never settles; cap the wait
+    await sleep(150);
+    await take.beatShot(name);
+  }
 
   async function cursorHide() { await page.evaluate(() => window.__uiclips?.hide()).catch(() => {}); }
   async function cursorShow() { await page.evaluate(() => window.__uiclips?.show()).catch(() => {}); }
@@ -318,9 +329,10 @@ export function createHelpers({ page, config, take, fast = false }) {
     async waitForMotion({ timeout = 3000 } = {}) {
       await page.evaluate(async (timeout) => {
         const until = (p) => Promise.race([p, new Promise((r) => setTimeout(r, timeout))]);
-        // The injected cursor's own click animations must not count as page motion.
+        // The injected cursor's own click animations must not count as page motion, nor animations that loop forever
+        // (a ticker or spinner never finishes, so waiting on it would always run out the timeout).
         const cursor = document.getElementById("__uiclips_cursor");
-        const page = document.getAnimations().filter((a) => !(cursor && a.effect?.target && cursor.contains(a.effect.target)));
+        const page = document.getAnimations().filter((a) => !(cursor && a.effect?.target && cursor.contains(a.effect.target)) && a.effect?.getTiming?.().iterations !== Infinity);
         await until(Promise.all(page.map((a) => a.finished.catch(() => {}))));
         await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
       }, timeout);
@@ -333,6 +345,7 @@ export function createHelpers({ page, config, take, fast = false }) {
 
     /** Name a moment. `focus` records the box of a locator on the mark (crops can point at the mark by name). */
     async mark(name, { focus } = {}) {
+      await endBeat();
       let box = null;
       if (focus) box = await boxOf(focus, { scrollIntoView: false }).catch(() => null);
       let boxesNow;
@@ -342,7 +355,7 @@ export function createHelpers({ page, config, take, fast = false }) {
       }
       take.mark(name, { box: box ? roundBox(box) : undefined, boxesNow });
       await measureCropFocus(name);
-      if (fast && take.beatShot) await take.beatShot(name);
+      if (fast) openBeat = name;
     },
 
     async trim(fn) { take.trimStart(); try { await fn(); } finally { take.trimEnd(); } },
@@ -407,6 +420,7 @@ export function createHelpers({ page, config, take, fast = false }) {
     // engine-internal
     _cursor: { hide: cursorHide, show: cursorShow, position: () => ({ ...cur }), park: () => moveToPoint(park, { ms: 0 }) },
     _measureCropFocus: measureCropFocus,
+    _endBeat: endBeat,
     _nextStep: () => ++stepNo,
   };
   return h;

@@ -42,7 +42,7 @@ export class DryTake {
     if (name === this.poster.mode && !this.poster.taken) this.poster.pending = true;
     this.pendingMarks.push(name);
   }
-  /** Rehearsal only: a 1× screenshot of the viewport at a beat, for the framing sheet. */
+  /** Rehearsal only: a 1× screenshot of the viewport at the end of a beat, for the framing sheet. */
   async beatShot(name) {
     if (!this.rehearsalDir || !this.page || this.recording) return;
     const file = `beat-${name.replace(/[^\w.-]+/g, "_")}.png`;

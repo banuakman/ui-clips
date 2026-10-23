@@ -58,6 +58,7 @@ export async function runClip({ browser, baseUrl, config, clip, mode = "dry", ta
     await take.start();
     log(`${clip.id}: ${record ? "recording" : "rehearsing"} steps`);
     await clip.steps({ page, h });
+    await h._endBeat();
     await h._measureCropFocus("end");
     // Target length: pad the final hold, or warn when the steps already overshoot.
     if (typeof clip.length === "number") {

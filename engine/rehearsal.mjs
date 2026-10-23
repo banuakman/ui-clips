@@ -53,10 +53,10 @@ export function buildRehearsal({ config, clip, take }) {
     }
     perSize[sz.name] = { outW: sz.outW, outH: sz.outH, windows, opening };
   }
-  // beats: the shot active at each mark
-  // beats: a beat shows the shot issued right after its mark (before any hold); otherwise the last shot before it.
+  // beats: a beat shows the shot issued right after its mark (before any hold or the next mark); otherwise the last shot
+  // before it. A hover's holdMs is not a hold event, so the next mark ends the search too.
   const marks = take.marks || [];
-  const holdSeqs = (take.holds || []).map((h) => h.seq);
+  const holdSeqs = [...(take.holds || []), ...marks].map((h) => h.seq).sort((a, b) => a - b);
   const beats = marks.map((m) => {
     const entry = { name: m.name, t: m.t, screenshot: take.beatShots?.[m.name] || null, windows: {},
       targets: m.boxesNow ? Object.fromEntries(Object.entries(m.boxesNow).map(([k, b]) => [k, b ? toStage(b, stage) : null])) : {} };
@@ -74,7 +74,8 @@ export function buildRehearsal({ config, clip, take }) {
         const geo = frameGeometry(stage, { aspect: sz.aspect, outWidthPx: info.outW, deviceScaleFactor: dsf, upscale: sz.upscale });
         const atMark = m.boxesNow[shot.anchor.track] ? clipToStage(toStage(m.boxesNow[shot.anchor.track], stage), stage) : null;
         if (atMark) {
-          const extras = (shot.extras || []).map((e) => e.track && m.boxesNow[e.track] ? clipToStage(toStage(m.boxesNow[e.track], stage), stage) : null).filter(Boolean);
+          // tracked extras move with the mark; locator extras keep the box measured at the shot (as the export camera does)
+          const extras = (shot.extras || []).map((e) => e.track ? (m.boxesNow[e.track] ? clipToStage(toStage(m.boxesNow[e.track], stage), stage) : null) : clipToStage(e.box, stage)).filter(Boolean);
           window = focusFrame(atMark, extras, { padding: shot.padding, align: shot.align, minSize: { w: window.w, h: window.h } }, geo, stage);
         }
       }
