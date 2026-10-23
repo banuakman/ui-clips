@@ -98,10 +98,12 @@ export function jpegSize(buf) {
 
 /** A recording take: screencast frames at 2×, a lossless poster, and take.json. */
 export class RecordTake extends DryTake {
-  constructor({ clip, config, page, takeDir }) {
+  /** `markShotNames`: the marks a sub-clip uses as its poster; only those get a lossless mark screenshot (null = all). */
+  constructor({ clip, config, page, takeDir, markShotNames = null }) {
     super({ clip, config });
     this.page = page;
     this.takeDir = takeDir;
+    this.markShotNames = markShotNames;
     this.frames = [];
     this._chain = Promise.resolve();
     this._error = null;
@@ -147,6 +149,8 @@ export class RecordTake extends DryTake {
     let spent = 0;
     for (const name of names) {
       if (this.markShots[name]) continue;
+      // A screenshot no sub-clip uses only stretches the hold (about 0.9 s at 2×), so skip it.
+      if (this.markShotNames && !this.markShotNames.has(name)) continue;
       const started = Date.now();
       if (name === this.poster.mode && this.poster.file) { this.markShots[name] = this.poster.file; continue; }
       const png = await this.page.screenshot({ type: "png", animations: "allow", caret: "hide", scale: "device" });

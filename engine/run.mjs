@@ -5,6 +5,7 @@ import { createHelpers, ExpectError, StepError } from "./helpers.mjs";
 import { DryTake, RecordTake, StopAtMark } from "./capture.mjs";
 import { rmSync, writeFileSync } from "node:fs";
 import { buildRehearsal } from "./rehearsal.mjs";
+import { loadClips, subclipPosterMarks } from "./config.mjs";
 
 export function takeDirFor(config, clip, takeId = "latest") {
   return path.join(config.cacheDir, clip.id, takeId);
@@ -28,8 +29,11 @@ export async function runClip({ browser, baseUrl, config, clip, mode = "dry", ta
     result.url = nav.url; result.status = nav.status;
     const rehearsalDir = path.join(config.cacheDir, clip.id, "rehearsal");
     if (!record) rmSync(rehearsalDir, { recursive: true, force: true });
+    // Lossless mark screenshots serve sub-clip posters: take only the marks a sub-clip of this clip names as its poster.
+    // A sub-clip added later without a re-record falls back to a video frame (export warns).
+    const markShotNames = record ? subclipPosterMarks(await loadClips(config), clip.id) : null;
     take = record
-      ? new RecordTake({ clip, config, page, takeDir: takeDirFor(config, clip, takeId) })
+      ? new RecordTake({ clip, config, page, takeDir: takeDirFor(config, clip, takeId), markShotNames })
       : new DryTake({ clip, config, page, rehearsalDir, stopAt });
     const runConfig = { ...config, crops: { ...(config.crops || {}), ...(config.sizes || {}), ...(clip.crops || {}) } };
     const h = createHelpers({ page, config: runConfig, take, fast: !record });

@@ -353,7 +353,7 @@ export async function exportClip({ config, clip, takeDir, outDir, log = () => {}
     const pm = clip.poster;
     if (pm && take.markShots?.[pm]) { posterSrc = path.join(takeDir, take.markShots[pm]); posterT = boundary(pm, marks, fullMs); }
     else if (pm === "start" || pm === "end" || pm == null) { posterT = pm === "start" ? T0 : T1 - 1000 / fps; posterNote = "poster taken from the video frame (no lossless screenshot at that moment)"; }
-    else if (marks.some((m) => m.name === pm)) { posterT = boundary(pm, marks, fullMs); posterNote = `no lossless screenshot at mark "${pm}" (no hold followed it); poster taken from the video frame`; }
+    else if (marks.some((m) => m.name === pm)) { posterT = boundary(pm, marks, fullMs); posterNote = `no lossless screenshot at mark "${pm}" (no hold followed it, or this sub-clip did not name it as its poster when the take was recorded; re-record ${parent.id}); poster taken from the video frame`; }
     else posterNote = `poster "${pm}" is not a mark of the take; poster skipped`;
   } else if (take.poster?.file) posterSrc = path.join(takeDir, take.poster.file);
   if (outputs.has("poster") && (posterSrc || posterNote)) {

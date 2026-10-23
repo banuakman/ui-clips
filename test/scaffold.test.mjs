@@ -49,3 +49,16 @@ test("renderConfig refuses nothing it is given but annotates every key", () => {
   assert.match(src, /viewport: \{ width: 1440, height: 900 \}/);
   assert.ok(src.split("\n").filter((l) => /^\s{2}\w+:/.test(l)).every((l) => l.includes("//") || /^\s{2}(fps|sizes|viewport|waitForFonts|password|serve|baseUrl)/.test(l)));
 });
+
+test("only the marks a sub-clip names as its poster get a lossless screenshot", async () => {
+  const { subclipPosterMarks } = await import("../engine/config.mjs");
+  const clips = [
+    { id: "rm-home", isSubclip: false, poster: "b3-drawer-top" },
+    { id: "rm-resolve", isSubclip: true, take: "rm-home", poster: "b7-status" },
+    { id: "rm-tail", isSubclip: true, take: "rm-home", poster: "end" },
+    { id: "other", isSubclip: true, take: "rm-review", poster: "b2-card" },
+  ];
+  assert.deepEqual([...subclipPosterMarks(clips, "rm-home")], ["b7-status"]);
+  assert.equal(subclipPosterMarks(clips, "rm-review").size, 1);
+  assert.equal(subclipPosterMarks(clips, "nothing").size, 0);
+});

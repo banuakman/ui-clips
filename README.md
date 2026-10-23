@@ -97,7 +97,7 @@ See [`examples/_template/`](examples/_template/) for an annotated config and cli
 | `h.hold(ms)` | Hold the frame (the poster is taken at the start of a hold, without stretching it) |
 | `h.waitForMotion()` | Wait for CSS animations and transitions to finish |
 | `h.visible(l)` / `h.hidden(l)` / `h.text(l, s)` | Expectations for `expect` |
-| `h.mark(name, { focus })` | Name a moment (poster, sub-clip boundary, crop focus); a lossless screenshot is taken at the next hold |
+| `h.mark(name, { focus })` | Name a moment (poster, sub-clip boundary, crop focus); when a sub-clip uses the mark as its poster, a lossless screenshot is taken at the next hold |
 | `h.shot("wide" \| "opening" \| { focus, padding }, { ms, mode, anchor })` | Explicit camera keyframe (see The camera) |
 | `h.track(name, locator)` | Sample a target's box every frame so a focus shot can follow it |
 | `h.speed(factor, fn)` | Run a step; that stretch plays `factor`× faster at export |

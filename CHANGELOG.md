@@ -12,6 +12,7 @@
 - Sizes: `upscale` per output size (opt-in, default 1, capped at 2) lowers the half-width floor by that factor, so a small widget can fill a square or portrait card from a frame upscaled up to that much; the floor check reports the cap in force
 - Camera: `camera.ease: "smooth"` (project or clip) for explicit moves: a sine ease whose window size moves geometrically, so a push in or pull out zooms at an even rate instead of rushing its first half; `"cubic"` stays the default
 - Camera: a centred focus frame centres on the anchor plus its visible extras when they fit the frame (before, on the anchor alone, so lopsided extras sat against an edge); `align: "top"` and `"bottom"` are unchanged
+- Record: a lossless mark screenshot is taken only for the marks a sub-clip of that clip names as its poster (each screenshot costs about 0.9 s of hold at 2×); a sub-clip added later falls back to a video frame and the export says to re-record
 - Export: the intermediate encode takes each frame's timestamp from its index (`setpts=N/(fps*TB)`), so intermediate frame k is frames.txt entry k. The list's rounded 0.033333 s durations drifted and the cfr pass duplicated a frame, putting the video a frame behind the camera track (a one-frame flash of the old page at a hard cut)
 
 ## Milestone 2, pass D: anchor rule, rehearsal report, framing sheet

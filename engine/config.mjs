@@ -47,6 +47,11 @@ export const CLIP_DEFAULTS = Object.freeze({
 
 export class ConfigError extends Error {}
 
+/** The marks of `clipId`'s take that a sub-clip names as its poster: the only marks worth a lossless screenshot. */
+export function subclipPosterMarks(clips, clipId) {
+  return new Set(clips.filter((c) => c.isSubclip && c.take === clipId && typeof c.poster === "string" && c.poster !== "start" && c.poster !== "end").map((c) => c.poster));
+}
+
 /** Resolve the project directory from --project or the current folder. */
 export function resolveProjectDir(arg) {
   const dir = path.resolve(arg || process.cwd());
