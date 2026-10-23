@@ -5,7 +5,7 @@ export default {
   alt: "A to-do list titled Today. A new task, Book the studio, is typed and added; the row slides in, then is ticked and struck through.",
   start: "/",
   length: "natural",
-  loop: "none",
+  loop: "crossfade",              // the last 400 ms blend into the head, so the MP4 and the GIF loop
   poster: "b5-end",               // the opening framing with the new task ticked: the README still
   steps: async ({ page, h }) => {
     const input = page.getByLabel("Add a task");
