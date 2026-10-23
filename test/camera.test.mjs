@@ -282,3 +282,19 @@ test('camera.ease "smooth": the window size moves geometrically through a move; 
   const ws = [1000, 1100, 1200, 1300, 1400, 1500, 1600].map((T) => windowAt(smooth.frames, T).w);
   assert.ok(ws.every((w, i) => i === 0 || w <= ws[i - 1] + 0.01), "smooth zooms in monotonically");
 });
+
+test("focusFrame: a centred anchor with lopsided extras centres on the anchor plus extras when they fit", () => {
+  const st = { x: 0, y: 0, w: 1440, h: 1440, masks: [], cuts: [] };
+  const g = frameGeometry(st, { aspect: 1, outWidthPx: 1200, deviceScaleFactor: 2 });
+  const list = { x: 75, y: 198, w: 315, h: 459 };
+  const extras = [{ x: 75, y: 148, w: 315, h: 50 }, { x: 405, y: 397, w: 66, h: 21 }, { x: 533, y: 495, w: 114, h: 21 }];
+  const f = focusFrame(list, extras, { padding: 70 }, g, st);
+  assert.equal(Math.round(f.w), 712);
+  assert.equal(Math.round(f.x), 5);
+  assert.equal(Math.round(f.y), 47);             // centred on 78–727, not on the list's own centre (y 72)
+  const alone = focusFrame(list, [], { padding: 70 }, g, st);
+  assert.equal(Math.round(alone.y + alone.h / 2), Math.round(list.y + list.h / 2));
+  const tall = focusFrame(list, [{ x: 75, y: 0, w: 315, h: 1400 }], { padding: 70 }, g, st);
+  assert.equal(Math.round(tall.h), 1440, "extras taller than the stage: the frame grows to the whole stage");
+  assert.equal(tall.y, 0);
+});

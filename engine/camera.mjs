@@ -263,7 +263,9 @@ export function focusFrame(anchor, extras, { padding = CAMERA.explicitPadding, a
   // keep visible extras inside horizontally when they fit
   const ux = padded.x, ux1 = padded.x + padded.w;
   if (ux1 - ux <= w) x = clamp(Math.min(x, ux), Math.max(0, ux1 - w), Math.max(0, stage.w - w)) ;
-  let y = mode === "top" ? anchor.y - padding : mode === "bottom" ? anchor.y + anchor.h + padding - h : anchor.y + anchor.h / 2 - h / 2;
+  // centred: on the anchor plus its visible extras when they fit the frame, so lopsided extras are not pushed to an edge
+  const cy = extras.length && padded.h <= h ? padded.y + padded.h / 2 : anchor.y + anchor.h / 2;
+  let y = mode === "top" ? anchor.y - padding : mode === "bottom" ? anchor.y + anchor.h + padding - h : cy - h / 2;
   if (mode === "top" && extras.length) y = Math.min(y, padded.y);
   if (mode === "bottom" && extras.length) y = Math.max(y, padded.y + padded.h - h);
   y = h <= stage.h ? clamp(y, 0, stage.h - h) : 0;
