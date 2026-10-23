@@ -136,4 +136,4 @@ When a clip hits a plugin problem, ship the best clip the current plugin can mak
 
 ## Tests and evals
 
-`npm test` runs the unit suite (`node --test`: camera, retime, time map, loop, motion, cursor, scaffold, rehearsal, intermediate encode). `claude plugin validate --strict .` checks the manifests and skills. `claude plugin eval . --trust-plugin` runs the eval cases in `evals/` against `examples/todo-demo`, which exercise the three skills end to end and need ffmpeg and Chromium on the machine.
+`npm test` runs the unit suite (`node --test`: camera, retime, time map, loop, motion, cursor, scaffold, rehearsal, intermediate encode). `claude plugin validate --strict .` checks the manifests and skills. `claude plugin eval . --trust-plugin --scaffold --allow-tools Bash Write Edit` runs the cases in `evals/`, which cover the interview path, the scenario-to-clip path and the record path's discipline; the eval sandbox cannot run a browser or bind a port, so the successful record path is checked by `evals/e2e.sh`, a headless session outside the sandbox that needs ffmpeg, Chromium and a logged-in `claude`. See [evals/README.md](../evals/README.md).
