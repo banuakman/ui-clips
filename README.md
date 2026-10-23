@@ -1,8 +1,8 @@
 # ui-clips
 
-<a href="docs/media/todo-add.mp4"><img src="docs/media/todo-add.poster.png" alt="A to-do list titled Today. A new task, Book the studio, is typed and added; the row slides in, then is ticked and struck through." width="720"></a>
+![A to-do list titled Today. A new task, Book the studio, is typed and added; the row slides in, then is ticked and struck through.](docs/media/todo-add.gif)
 
-*A clip the plugin made of [its own demo page](examples/todo-demo): [watch the MP4](docs/media/todo-add.mp4).*
+Sharp version: [todo-add.mp4](docs/media/todo-add.mp4). A clip the plugin made of [its own demo page](examples/todo-demo).
 
 Short, silent, retina-sharp clips and stills of any web UI, recorded from a scenario written in plain words.
 When the design changes, one command re-records every clip.
