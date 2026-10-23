@@ -1,0 +1,5 @@
+ui-clips — Copyright 2026 Banu Akman
+
+No third-party code is adapted. The engine depends on Playwright (Apache-2.0),
+pixelmatch (ISC) and pngjs (MIT) as npm packages, and calls ffmpeg, ffprobe and
+cwebp as separate programs; none of their code is copied into this repository.

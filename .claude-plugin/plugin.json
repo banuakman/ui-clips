@@ -6,6 +6,6 @@
   "author": { "name": "Banu Akman", "url": "https://github.com/banuakman" },
   "homepage": "https://github.com/banuakman/ui-clips",
   "repository": "https://github.com/banuakman/ui-clips",
-  "license": "MIT",
+  "license": "Apache-2.0",
   "keywords": ["playwright", "ffmpeg", "screen-recording", "portfolio", "design"]
 }

@@ -131,4 +131,4 @@ Playwright's `recordVideo` encodes at CSS-pixel size in realtime, so text goes s
 
 ## License
 
-MIT
+Apache License 2.0; see [LICENSE](LICENSE) and [NOTICE](NOTICE).
