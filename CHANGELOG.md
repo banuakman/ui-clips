@@ -1,6 +1,18 @@
 # Changelog
 
-## Unreleased (milestone 3: skills; fixes from the first real clip projects)
+## 0.1.0 (2026-10-23)
+
+First release: the capture and export engine (milestones 1 and 2), the three skills (milestone 3), and the publishing pass (milestone 4).
+
+Milestone 4:
+- README opens with a clip the plugin made of its own demo page (`docs/media/todo-add.mp4` and its poster), then install, the three skills, requirements, docs and licence
+- `docs/designers.md` (making clips without code: the viewport is the first decision, one anchor per shot, screenshots per beat as the storyboard, what the rehearsal and the framing sheet say before recording, published prototypes), `docs/developers.md` (project contract, helper API, capture and export, the time map, CLI, working rules, filing an issue from a clip project), `docs/spec.md` (the specification, copied as-is)
+- Evals: `claude plugin eval` cases for the three skills against the demo page (`evals/`), each self-contained through a fixture script
+- `ui-clips init` writes a `CLAUDE.md` into every new clip project with the working rule: the project makes clips and never edits the plugin; problems are filed as `docs/issues/<date>-<name>.md`
+- Name and spelling: the in-page cursor and style ids and the window global now use the hyphenated spelling (`ui-clips-cursor`, `ui-clips-css`, `window["ui-clips"]`)
+- Apache License 2.0, `NOTICE`, `CODEOWNERS`, `CONTRIBUTING.md`; `version` 0.1.0 in `plugin.json` and `package.json`
+
+Milestone 3 and the fixes from the first real clip projects:
 
 - Skills: `new-clip-project` (one-round interview → `ui-clips init` → `doctor`), `author-clip` (scenario agreed first; locators from `inspect`, never guessed; an `expect` per step; camera plan; `dry-run` until clean; `sheet --framing` shown before recording) with reference files for the clip format, locators and the camera, and `record-clips` (`dry-run` → `record` → `export` → every check verified → `sheet --beats --size card` → file list)
 - `agents/clip-explorer.md`: next-iteration stub that inspects an app's routes and drafts a storyboard

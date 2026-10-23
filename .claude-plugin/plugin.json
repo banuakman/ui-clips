@@ -1,7 +1,7 @@
 {
   "name": "ui-clips",
   "displayName": "UI Clips",
-  "version": "0.1.0-m3",
+  "version": "0.1.0",
   "description": "Record short, scripted, retina-sharp UI clips from any URL with Playwright and ffmpeg.",
   "author": { "name": "Banu Akman", "url": "https://github.com/banuakman" },
   "homepage": "https://github.com/banuakman/ui-clips",

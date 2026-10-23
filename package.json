@@ -1,6 +1,6 @@
 {
   "name": "ui-clips",
-  "version": "0.1.0-m1",
+  "version": "0.1.0",
   "description": "Record short, scripted, retina-sharp UI clips from any URL with Playwright and ffmpeg.",
   "type": "module",
   "private": true,
