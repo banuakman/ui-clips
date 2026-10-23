@@ -18,7 +18,7 @@ export default {
     await h.hold(800);
     // Explicit track: wide → focus on the input (the first push scales from the top-left) → the new row → wide.
     await h.click(input);
-    await h.shot({ focus: [input], padding: 24 }, { ms: 600 });
+    await h.shot({ anchor: input, extras: [page.getByRole("button", { name: "Add" })], padding: 24 }, { ms: 600 });   // the Add click must land inside this frame
     await h.mark("b2-typing");
     await h.speed(2, async () => {                                 // the typing plays 2× faster at export
       await h.type(input, "Book the studio", { click: false });   // the field was clicked before the shot
