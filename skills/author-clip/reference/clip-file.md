@@ -14,7 +14,7 @@ export default {
   loop: "crossfade",                            // "none" | "return" | "crossfade"
   poster: "b3-drawer-top",                      // "start" | "end" | ms | a mark name
   zoom: "gentle",                               // optional override of the project default: "off" | "gentle" | "pronounced"
-  camera: { feel: "calm" },                     // optional override: "brisk" | "calm" | "lazy"
+  camera: { feel: "calm" },                     // optional override: feel "brisk" | "calm" | "lazy"; ease "cubic" | "smooth"
   crops: {},                                    // optional extra output sizes for this clip, same shapes as the config's sizes
   steps: async ({ page, h }) => {
     const row = page.locator("tr", { hasText: "Missing buyer VAT ID" }).first();
@@ -49,9 +49,10 @@ export default {
 | `length` | `"natural"` (as long as the steps) or a target in ms (±0.2 s is checked at export) |
 | `loop` | `"return"`: the steps end in the start state and export trims to the matching frame; `"crossfade"`: the last 400 ms blend into the head after a 0.4 s rest; `"none"` |
 | `poster` | the still that stands in for the clip: a mark name is the clear choice; the engine takes a lossless screenshot at the next hold after the mark |
-| `zoom`, `camera` | per-clip overrides of the project defaults |
+| `zoom`, `camera` | per-clip overrides of the project defaults; `camera` takes `feel` and `ease` (camera.md) |
+| `crops` | extra output sizes for this clip, the config's `sizes` shapes: `{ width, height, scale, focus, upscale }` or `{ aspect, focus }`; `upscale` (1 to 2) lets a small widget fill a square or portrait card (camera.md) |
 | `freezeTime` | ISO date; use it whenever the UI shows a date or time |
-| `take`, `from`, `to` | a **sub-clip**: cut from another clip's take between two marks (or `"start"` / `"end"` / ms), with its own id, poster and manifest entry; never recorded itself. `{ id: "rm-resolve", take: "rm-home", from: "b4-drawer-bottom", to: "end", loop: "none", poster: "b7-status" }` |
+| `take`, `from`, `to` | a **sub-clip**: cut from another clip's take between two marks (or `"start"` / `"end"` / ms), with its own id, poster and manifest entry; never recorded itself. `{ id: "rm-resolve", take: "rm-home", from: "b4-drawer-bottom", to: "end", loop: "none", poster: "b7-status" }`. Its poster mark gets a lossless screenshot only if the sub-clip file exists when the parent is recorded, so write the sub-clip first, then record the parent (the export says so otherwise) |
 
 ## Helpers in `steps({ page, h })`
 
@@ -70,7 +71,7 @@ export default {
 | `h.shot(spec, { ms })` | explicit camera keyframe (camera.md) |
 | `h.track(name, locator)` | sample a target's box every frame so a focus shot can follow it |
 | `h.speed(factor, fn)` | the stretch inside `fn` plays `factor`× faster at export (a long stepper, slow typing) |
-| `h.trim(fn)` | run `fn` but cut its wait from the video |
+| `h.trim(fn)` | run `fn` but cut its wait from the video (a page load); shots, marks and clicks after it land at the cut |
 | `h.parkCursor()` | ease the cursor off and fade it out (before a `return` loop's end) |
 
 ## Rules

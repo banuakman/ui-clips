@@ -18,13 +18,13 @@ The page is recorded once at the viewport; every output size (`sizes` in the con
 
 Anchors and extras are locators (box measured when the shot is logged) or names from `h.track(name, locator)` (box sampled every frame). An anchor that is off-stage when the shot starts hugs the edge it will enter from and the window follows it in.
 
-Moves ease in-out over `ms` (600 is the house pace); every shot holds at least 600 ms; a click inside a move is flagged. The first shot applies from t = 0 with no move.
+Moves ease in-out over `ms` (600 is the house pace); every shot holds at least 600 ms; a click inside a move is flagged. The first shot applies from t = 0 with no move. `camera: { ease: "smooth" }` (project config or clip) swaps the default cubic ease for a sine ease whose zoom is geometric, so a long push in or pull out reads at an even rate; leave it on `"cubic"` for short moves. A shot logged after an `h.trim` lands at the cut, as do marks and clicks.
 
 ## Rules the export checks (spec §13)
 
 - **Rest**: every size starts and ends at the opening framing; a crossfade loop rests there 0.4 s before the fade. So: `h.shot("opening")` then `h.hold(≥ 1200)` (+ 400 for a crossfade).
 - **Clicks in frame**: every click lands inside the frame the viewer sees. Plan the shot that contains the button before clicking it; widen with `extras` when a click and its result are apart.
-- **Floor**: no frame narrower than half the output width in CSS px (`gentle` zoom reaches 1.6×, `pronounced` 2.2×).
+- **Floor**: no frame narrower than half the output width in CSS px (`gentle` zoom reaches 1.6×, `pronounced` 2.2×). A size may opt out with `upscale` (1 to 2, for example `square: { width: 600, height: 600, scale: 2, upscale: 1.5 }`): the floor divides by it, so a small widget can fill a square or portrait card from a frame upscaled up to that factor. Text goes softer the further above 1; the floor check names the cap in force.
 - **Stage**: nothing from `stage.exclude` in any frame; a focus frame that fits the stage stays inside it.
 - **Timing**: ±0.2 s of a `length` target; no dead frames longer than the scripted holds.
 

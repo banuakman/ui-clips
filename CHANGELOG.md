@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased (milestone 3: skills)
+## Unreleased (milestone 3: skills; fixes from the first real clip projects)
 
 - Skills: `new-clip-project` (one-round interview → `ui-clips init` → `doctor`), `author-clip` (scenario agreed first; locators from `inspect`, never guessed; an `expect` per step; camera plan; `dry-run` until clean; `sheet --framing` shown before recording) with reference files for the clip format, locators and the camera, and `record-clips` (`dry-run` → `record` → `export` → every check verified → `sheet --beats --size card` → file list)
 - `agents/clip-explorer.md`: next-iteration stub that inspects an app's routes and drafts a storyboard
@@ -14,6 +14,7 @@
 - Camera: a centred focus frame centres on the anchor plus its visible extras when they fit the frame (before, on the anchor alone, so lopsided extras sat against an edge); `align: "top"` and `"bottom"` are unchanged
 - Record: a lossless mark screenshot is taken only for the marks a sub-clip of that clip names as its poster (each screenshot costs about 0.9 s of hold at 2×); a sub-clip added later falls back to a video frame and the export says to re-record
 - Rehearsal: the framing-sheet screenshot of a beat is taken when the beat ends (at the next mark or the end of the steps), once the page has settled, so it shows what the beat's actions produced rather than the state before them; a beat separated from the next only by a hover no longer takes the following beat's shot; locator extras keep the box measured at the shot when a focus follows its tracked anchor; `waitForMotion` ignores animations that loop forever (a ticker, a spinner)
+- Record: a `length` target counts trims as well as speed ramps when it pads the final hold, the same take → output map the export uses (a clip with an `h.trim` overshot its target by the trimmed time)
 - Export: the intermediate encode takes each frame's timestamp from its index (`setpts=N/(fps*TB)`), so intermediate frame k is frames.txt entry k. The list's rounded 0.033333 s durations drifted and the cfr pass duplicated a frame, putting the video a frame behind the camera track (a one-frame flash of the old page at a hard cut)
 
 ## Milestone 2, pass D: anchor rule, rehearsal report, framing sheet

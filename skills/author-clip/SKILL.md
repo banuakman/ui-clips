@@ -73,7 +73,7 @@ Every locator must resolve, every action run, every `expect` pass, and the per-b
 ui-clips sheet <id> --framing --size card --project <dir>
 ```
 
-(`--size` names one of the config's camera sizes; `full` when there is no card.) The sheet shows, per beat, the stage frame with the planned camera window drawn on it beside the crop that window gives. Read it and check each row shows what the scenario says for that beat. Give the user the path (send the file where a file-sending tool exists) and ask whether the framing is right. Change the shot list, not the UI, until it is.
+(`--size` names one of the config's camera sizes; `full` when there is no card.) The sheet shows, per beat, the stage as the beat leaves it (its screenshot is taken when the beat ends, after the page settles) with the planned camera window drawn on it beside the crop that window gives. Read it and check each row shows what the scenario says for that beat. Give the user the path (send the file where a file-sending tool exists) and ask whether the framing is right. Change the shot list, not the UI, until it is.
 
 Then record with `/ui-clips:record-clips <id>`, which also builds the beats contact sheet from the real frames.
 
