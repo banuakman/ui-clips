@@ -269,3 +269,16 @@ test("upscale: a size option lowers the floor by that factor, capped at 2", () =
   const f = focusFrame({ x: 600, y: 300, w: 200, h: 200 }, [], { padding: 24 }, g3, stage);
   assert.equal(Math.round(f.w), 300, "a frame narrower than the default floor is allowed up to the upscale");
 });
+
+test('camera.ease "smooth": the window size moves geometrically through a move; "cubic" moves it linearly', () => {
+  const explicitShots = [{ t: 0, kind: "wide", ms: 0 }, { t: 1000, kind: "focus", targets: [{ box: { x: 600, y: 400, w: 100, h: 40 } }], ms: 600 }];
+  const common = { explicitShots, stage, aspect: 1.6, outWidthPx: 1440, mode: "gentle", feel: "calm", durationMs: 4000, fps: 30 };
+  const cubic = buildTrack({ ...common });
+  const smooth = buildTrack({ ...common, ease: "smooth" });
+  assert.equal(Math.round(windowAt(cubic.frames, 1300).w), 1080, "cubic: halfway through the move the width is the arithmetic mean of 1440 and 720");
+  assert.equal(Math.round(windowAt(smooth.frames, 1300).w), Math.round(Math.sqrt(1440 * 720)), "smooth: the geometric mean");
+  assert.equal(Math.round(windowAt(smooth.frames, 1600).w), 720, "both land on the target");
+  assert.equal(Math.round(windowAt(cubic.frames, 1600).w), 720);
+  const ws = [1000, 1100, 1200, 1300, 1400, 1500, 1600].map((T) => windowAt(smooth.frames, T).w);
+  assert.ok(ws.every((w, i) => i === 0 || w <= ws[i - 1] + 0.01), "smooth zooms in monotonically");
+});

@@ -196,7 +196,7 @@ export async function exportClip({ config, clip, takeDir, outDir, log = () => {}
     const renderH = even(Math.round(renderW / sz.aspect));
     let frames = null, geo = frameGeometry(stage, { aspect: sz.aspect, outWidthPx: sz.outW, deviceScaleFactor: dsf, upscale: sz.upscale }), padBelow = geo.padBelow, staticWin = null;
     if (sz.mode === "camera") {
-      const track = buildTrack({ actions, explicitShots, tracks, stage, aspect: sz.aspect, outWidthPx: sz.outW, deviceScaleFactor: dsf, upscale: sz.upscale, mode, feel: feelName, durationMs: fullMs, fps });
+      const track = buildTrack({ actions, explicitShots, tracks, stage, aspect: sz.aspect, outWidthPx: sz.outW, deviceScaleFactor: dsf, upscale: sz.upscale, mode, feel: feelName, ease: clip.camera?.ease || config.camera?.ease || "cubic", durationMs: fullMs, fps });
       geo = track.geo;
       frames = track.frames.slice(fa, fb).map((f) => ({ ...f, t: f.t - track.frames[fa].t }));
       for (const w of track.warnings) if (!result.warnings.includes(w)) result.warnings.push(w);

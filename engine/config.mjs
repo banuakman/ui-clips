@@ -20,7 +20,7 @@ export const DEFAULTS = Object.freeze({
   quality: { crf: 20, webmCrf: 30, maxWidth: 1440, jpeg: 92 },
   sizes: { full: true },                 // output sizes every clip gets (§10.2); clips add crops
   crops: {},                             // legacy alias of sizes (project level)
-  camera: { feel: "calm" },              // "brisk" | "calm" | "lazy" (§10.3)
+  camera: { feel: "calm" },              // "brisk" | "calm" | "lazy" (§10.3); ease: "cubic" | "smooth" for explicit moves
   stage: null,                           // { exclude: ["nav.sidebar", { x, y, w, h }], fill: "#FFFFFF" }
   hideSelectors: [],
   cssOverrides: "",

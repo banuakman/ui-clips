@@ -21,6 +21,7 @@ export const CAMERA = Object.freeze({
 
 const TARGET_KINDS = new Set(["click", "hover", "type", "press", "select", "scroll"]);
 const easeInOutCubic = (t) => (t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2);
+const easeInOutSine = (t) => (1 - Math.cos(Math.PI * t)) / 2;
 const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
 
 export function union(a, b) {
@@ -170,8 +171,10 @@ function autoTargetAt(shots, T, geo, stage) {
 /**
  * Explicit shots from the take: [{ t, kind: "wide"|"focus", targets: [{box}|{track}], padding, ms }] in output time.
  * tracks: { name: [[t, x, y, w, h], ...] } in output time and stage coords. Returns { windowAt(T), shots, warnings }.
+ * `ease`: "cubic" (default) or "smooth", a gentler sine ease whose window size moves geometrically, so a push in or pull
+ * out zooms at an even rate instead of rushing its first half.
  */
-export function buildExplicit(shotsIn, { tracks = {}, stage, geo, actions = [] }) {
+export function buildExplicit(shotsIn, { tracks = {}, stage, geo, actions = [], ease = "cubic" }) {
   const warnings = [];
   const shots = [...shotsIn].sort((a, b) => a.t - b.t).map((s) => ({ ...s, ms: s.ms ?? CAMERA.explicitDefaultMoveMs, padding: s.padding ?? CAMERA.explicitPadding }));
   // A first shot logged within the first frame of the take is the opening framing from t = 0.
@@ -228,6 +231,10 @@ export function buildExplicit(shotsIn, { tracks = {}, stage, geo, actions = [] }
     if (u >= 1) return target;
     const from = cur._from || stateAtStart?.(cur) || { ...geo.wide };
     cur._from = from;
+    if (ease === "smooth") {
+      const e = easeInOutSine(clamp(u, 0, 1));
+      return { x: from.x + (target.x - from.x) * e, y: from.y + (target.y - from.y) * e, w: from.w * Math.pow(target.w / from.w, e), h: from.h * Math.pow(target.h / from.h, e) };
+    }
     const e = easeInOutCubic(clamp(u, 0, 1));
     return { x: from.x + (target.x - from.x) * e, y: from.y + (target.y - from.y) * e, w: from.w + (target.w - from.w) * e, h: from.h + (target.h - from.h) * e };
   };
@@ -329,10 +336,10 @@ export function settledWindowAt(frames, explicitShots, T) {
 /**
  * @returns {{frames:[{t,x,y,w,h,scale}], shots, warnings, geo}}
  */
-export function buildTrack({ actions = [], explicitShots = [], tracks = {}, stage, aspect, outWidthPx, deviceScaleFactor = 2, upscale = 1, mode = "gentle", feel = "calm", durationMs, fps }) {
+export function buildTrack({ actions = [], explicitShots = [], tracks = {}, stage, aspect, outWidthPx, deviceScaleFactor = 2, upscale = 1, mode = "gentle", feel = "calm", ease = "cubic", durationMs, fps }) {
   const geo = frameGeometry(stage, { aspect, outWidthPx, deviceScaleFactor, upscale });
   const warnings = [];
-  const explicit = buildExplicit(explicitShots, { tracks, stage, geo, actions });
+  const explicit = buildExplicit(explicitShots, { tracks, stage, geo, actions, ease });
   warnings.push(...explicit.warnings);
   const auto = detectShots(actions, { mode, stage, durationMs, geo, feel });
   // explicit overrides auto in its window: drop auto shots that start at or after the first explicit shot
